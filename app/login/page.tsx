@@ -43,9 +43,9 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
-      const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${location.origin}/dashboard` } })
+      const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `https://restaurant-os-theta.vercel.app/dashboard` } })
       if (error) throw error
-      router.push("/dashboard")
+      // OAuth will automatically redirect to /dashboard after successful authentication
     } catch (error: any) {
       setError(error.message || "Failed to sign in with Google")
     } finally {

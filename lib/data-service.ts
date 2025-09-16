@@ -1,6 +1,4 @@
 import { createClient } from "@/lib/supabase/client"
-import { auth } from "@/lib/firebase"
-import { User } from "firebase/auth"
 
 // Types for our restaurant data
 export interface UserProfile {
@@ -85,20 +83,25 @@ export interface StaffMember {
 class DataService {
   private supabase = createClient()
 
-  // Get current Firebase user
-  private getCurrentUser(): User | null {
-    return auth.currentUser
+  // Get current user from Supabase auth
+  private async getCurrentUser() {
+    const { data: { user }, error } = await this.supabase.auth.getUser()
+    if (error) {
+      console.error('Error getting current user:', error)
+      return null
+    }
+    return user
   }
 
   // Get current user ID
-  private getCurrentUserId(): string | null {
-    const user = this.getCurrentUser()
-    return user?.uid || null
+  private async getCurrentUserId(): Promise<string | null> {
+    const user = await this.getCurrentUser()
+    return user?.id || null
   }
 
   // User Profile Management
   async createUserProfile(userData: Omit<UserProfile, 'id' | 'created_at' | 'updated_at'>): Promise<UserProfile | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { data, error } = await this.supabase
@@ -121,7 +124,7 @@ class DataService {
   }
 
   async getUserProfile(): Promise<UserProfile | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) return null
 
     const { data, error } = await this.supabase
@@ -139,7 +142,7 @@ class DataService {
   }
 
   async updateUserProfile(updates: Partial<UserProfile>): Promise<UserProfile | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { data, error } = await this.supabase
@@ -162,7 +165,7 @@ class DataService {
 
   // Menu Items Management
   async getMenuItems(): Promise<MenuItem[]> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) return []
 
     const { data, error } = await this.supabase
@@ -180,7 +183,7 @@ class DataService {
   }
 
   async createMenuItem(itemData: Omit<MenuItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<MenuItem | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { data, error } = await this.supabase
@@ -203,7 +206,7 @@ class DataService {
   }
 
   async updateMenuItem(id: string, updates: Partial<MenuItem>): Promise<MenuItem | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { data, error } = await this.supabase
@@ -226,7 +229,7 @@ class DataService {
   }
 
   async deleteMenuItem(id: string): Promise<boolean> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { error } = await this.supabase
@@ -245,7 +248,7 @@ class DataService {
 
   // Customers Management
   async getCustomers(): Promise<Customer[]> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) return []
 
     const { data, error } = await this.supabase
@@ -263,7 +266,7 @@ class DataService {
   }
 
   async createCustomer(customerData: Omit<Customer, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Customer | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { data, error } = await this.supabase
@@ -287,7 +290,7 @@ class DataService {
 
   // Orders Management
   async getOrders(): Promise<Order[]> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) return []
 
     const { data, error } = await this.supabase
@@ -305,7 +308,7 @@ class DataService {
   }
 
   async createOrder(orderData: Omit<Order, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Order | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { data, error } = await this.supabase
@@ -329,7 +332,7 @@ class DataService {
 
   // Inventory Management
   async getInventoryItems(): Promise<InventoryItem[]> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) return []
 
     const { data, error } = await this.supabase
@@ -347,7 +350,7 @@ class DataService {
   }
 
   async createInventoryItem(itemData: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<InventoryItem | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { data, error } = await this.supabase
@@ -371,7 +374,7 @@ class DataService {
 
   // Staff Management
   async getStaffMembers(): Promise<StaffMember[]> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) return []
 
     const { data, error } = await this.supabase
@@ -389,7 +392,7 @@ class DataService {
   }
 
   async createStaffMember(staffData: Omit<StaffMember, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<StaffMember | null> {
-    const userId = this.getCurrentUserId()
+    const userId = await this.getCurrentUserId()
     if (!userId) throw new Error('User not authenticated')
 
     const { data, error } = await this.supabase

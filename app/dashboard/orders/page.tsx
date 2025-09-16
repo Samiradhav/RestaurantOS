@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "sonner"
 import { supabaseDataService, type Order as SupabaseOrder, type MenuItem, type Customer } from "@/lib/supabase-data-service"
 import { useCustomerStore } from "@/lib/shared-state"
-
+import { useCurrency } from "@/lib/currency-store"
 // Local interfaces for UI state management
 interface LocalOrder {
   id: string // Changed to string to match Supabase
@@ -23,6 +23,7 @@ interface LocalOrder {
   items: string[]
   total: number
   status: "pending" | "preparing" | "completed" | "cancelled"
+  paymentMethod?: "cash" | "online" | "card"
   date: string
   time: string
 }
@@ -85,6 +86,9 @@ export default function OrdersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState("")
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
   const [isLoadingMenuItems, setIsLoadingMenuItems] = useState(false)
+
+  // Use currency hook
+  const { formatPrice } = useCurrency()
 
   // Load data on component mount
   useEffect(() => {
@@ -333,7 +337,7 @@ export default function OrdersPage() {
     {
       key: "total" as keyof LocalOrder,
       label: "Total",
-      render: (value: number) => <div className="font-medium text-foreground">${value.toFixed(2)}</div>,
+      render: (value: number) => <div className="font-medium text-foreground">{formatPrice(value)}</div>,
     },
     {
       key: "status" as keyof LocalOrder,
@@ -343,6 +347,21 @@ export default function OrdersPage() {
           {getStatusIcon(value)}
           {value.charAt(0).toUpperCase() + value.slice(1)}
         </Badge>
+      ),
+    },
+    {
+      key: "paymentMethod" as keyof LocalOrder,
+      label: "Payment",
+      render: (value: string, order: LocalOrder) => (
+        <div>
+          {order.status === 'completed' ? (
+            <Badge variant={value ? "default" : "secondary"}>
+              {value ? value.charAt(0).toUpperCase() + value.slice(1) : "Not Set"}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground text-sm">-</span>
+          )}
+        </div>
       ),
     },
     {
@@ -502,7 +521,7 @@ export default function OrdersPage() {
                         <div className="flex-1">
                           <div className="font-medium text-foreground">{item.name}</div>
                           <div className="text-sm text-muted-foreground">
-                            ${item.price.toFixed(2)} • {item.category}
+                            {formatPrice(item.price)} • {item.category}
                             {!item.is_available && (
                               <span className="ml-2 text-red-500">(Unavailable)</span>
                             )}
@@ -532,8 +551,8 @@ export default function OrdersPage() {
                   {orderItems.map((item) => (
                     <div key={item.menuItemId} className="flex items-center gap-3 p-3 bg-card border rounded-lg">
                       <div className="flex-1">
-                        <div className="font-medium text-foreground">{item.name}</div>
-                        <div className="text-sm text-muted-foreground">${item.price.toFixed(2)} each</div>
+                      <div className="font-medium text-foreground">{item.name}</div>
+                      <div className="text-sm text-muted-foreground">{formatPrice(item.price)} each</div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
@@ -565,12 +584,12 @@ export default function OrdersPage() {
                 </div>
               )}
 
-              {/* Order Total */}
-              {orderItems.length > 0 && (
+                            {/* Order Total */}
+                            {orderItems.length > 0 && (
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-center text-lg font-semibold">
                     <span>Total:</span>
-                    <span>${calculateTotal().toFixed(2)}</span>
+                    <span>{formatPrice(calculateTotal())}</span>
                   </div>
                 </div>
               )}
@@ -631,6 +650,26 @@ export default function OrdersPage() {
                   {viewingOrder.status.charAt(0).toUpperCase() + viewingOrder.status.slice(1)}
                 </Badge>
               </div>
+              {viewingOrder.status === 'completed' && (
+                <div className="col-span-2">
+                  <Label className="text-sm text-muted-foreground">Payment Method</Label>
+                  <Select 
+                    value={viewingOrder.paymentMethod || ''} 
+                    onValueChange={(value) => {
+                      setViewingOrder(prev => prev ? { ...prev, paymentMethod: value as "cash" | "online" | "card" } : null)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select payment method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="online">Online Payment</SelectItem>
+                      <SelectItem value="card">Card Payment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div>
@@ -647,7 +686,7 @@ export default function OrdersPage() {
             <div className="border-t pt-4">
               <div className="flex justify-between items-center text-lg font-semibold">
                 <span>Total:</span>
-                <span>${viewingOrder.total.toFixed(2)}</span>
+                <span>{formatPrice(viewingOrder.total)}</span>
               </div>
             </div>
           </div>

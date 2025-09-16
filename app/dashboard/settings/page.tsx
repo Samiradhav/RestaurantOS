@@ -235,10 +235,11 @@ export default function SettingsPage() {
     setSettings((prev) => ({
       ...prev,
       [section]: { 
-        ...prev[section as keyof typeof prev], 
+        ...(prev[section as keyof typeof prev] && typeof prev[section as keyof typeof prev] === 'object' ? prev[section as keyof typeof prev] as Record<string, any> : {}), 
         [key]: value 
       },
     }))
+  
 
     // Special handling for currency changes
     if (section === "business" && key === "currency") {

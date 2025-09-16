@@ -7,7 +7,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // The 'swcMinify: true' option is no longer needed and should be removed.
+    // The 'swcMinify: true' option is no longer needed and should be removed.
   // swcMinify: true, 
   experimental: {
     optimizePackageImports: [

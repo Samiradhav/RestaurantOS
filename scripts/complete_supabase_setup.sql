@@ -3,13 +3,14 @@
 -- =====================================================
 -- This script creates all tables needed for your restaurant app
 -- Run this in your Supabase SQL Editor
+-- Updated to use pure Supabase authentication (no Firebase)
 
 -- =====================================================
 -- 1. USER PROFILES TABLE
 -- =====================================================
 -- Stores basic user information
 CREATE TABLE IF NOT EXISTS public.user_profiles (
-  id TEXT PRIMARY KEY, -- Firebase UID
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
   restaurant_name TEXT,
@@ -25,7 +26,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 -- Stores all menu items for the restaurant
 CREATE TABLE IF NOT EXISTS public.menu_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL, -- Firebase UID
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
   price DECIMAL(10,2) NOT NULL,
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.menu_items (
 -- Stores customer information
 CREATE TABLE IF NOT EXISTS public.customers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL, -- Firebase UID
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   email TEXT,
   phone TEXT,
@@ -65,7 +66,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
 -- Stores order information
 CREATE TABLE IF NOT EXISTS public.orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL, -- Firebase UID
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   customer_id UUID REFERENCES public.customers(id),
   order_number TEXT NOT NULL,
   items JSONB NOT NULL, -- Store order items as JSON
@@ -89,7 +90,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
 -- Stores inventory/stock information
 CREATE TABLE IF NOT EXISTS public.inventory_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL, -- Firebase UID
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   category TEXT NOT NULL,
   current_stock INTEGER DEFAULT 0,
@@ -113,7 +114,7 @@ CREATE TABLE IF NOT EXISTS public.inventory_items (
 -- Stores staff/employee information
 CREATE TABLE IF NOT EXISTS public.staff_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL, -- Firebase UID
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   employee_id TEXT UNIQUE,
   name TEXT NOT NULL,
   email TEXT,
@@ -156,7 +157,7 @@ CREATE TABLE IF NOT EXISTS public.attendance (
 -- Stores business expenses
 CREATE TABLE IF NOT EXISTS public.expenses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL, -- Firebase UID
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   category TEXT NOT NULL,
   description TEXT NOT NULL,
   amount DECIMAL(10,2) NOT NULL,
@@ -176,7 +177,7 @@ CREATE TABLE IF NOT EXISTS public.expenses (
 -- Stores daily sales summaries
 CREATE TABLE IF NOT EXISTS public.sales_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL, -- Firebase UID
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   total_sales DECIMAL(10,2) NOT NULL,
   total_orders INTEGER NOT NULL,
@@ -195,7 +196,7 @@ CREATE TABLE IF NOT EXISTS public.sales_reports (
 -- Stores app settings and configuration
 CREATE TABLE IF NOT EXISTS public.settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL, -- Firebase UID
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   setting_key TEXT NOT NULL,
   setting_value JSONB NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -244,37 +245,71 @@ ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 -- =====================================================
 -- CREATE RLS POLICIES
 -- =====================================================
--- For now, we'll allow all access (you can restrict later for security)
+-- Proper user-specific security policies
 
 -- User profiles policies
-CREATE POLICY "user_profiles_all_access" ON public.user_profiles FOR ALL USING (true);
+CREATE POLICY "user_profiles_select_own" ON public.user_profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "user_profiles_insert_own" ON public.user_profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "user_profiles_update_own" ON public.user_profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "user_profiles_delete_own" ON public.user_profiles FOR DELETE USING (auth.uid() = id);
 
 -- Menu items policies
-CREATE POLICY "menu_items_all_access" ON public.menu_items FOR ALL USING (true);
+CREATE POLICY "menu_items_select_own" ON public.menu_items FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "menu_items_insert_own" ON public.menu_items FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "menu_items_update_own" ON public.menu_items FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "menu_items_delete_own" ON public.menu_items FOR DELETE USING (auth.uid() = user_id);
 
 -- Customers policies
-CREATE POLICY "customers_all_access" ON public.customers FOR ALL USING (true);
+CREATE POLICY "customers_select_own" ON public.customers FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "customers_insert_own" ON public.customers FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "customers_update_own" ON public.customers FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "customers_delete_own" ON public.customers FOR DELETE USING (auth.uid() = user_id);
 
 -- Orders policies
-CREATE POLICY "orders_all_access" ON public.orders FOR ALL USING (true);
+CREATE POLICY "orders_select_own" ON public.orders FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "orders_insert_own" ON public.orders FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "orders_update_own" ON public.orders FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "orders_delete_own" ON public.orders FOR DELETE USING (auth.uid() = user_id);
 
 -- Inventory items policies
-CREATE POLICY "inventory_items_all_access" ON public.inventory_items FOR ALL USING (true);
+CREATE POLICY "inventory_items_select_own" ON public.inventory_items FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "inventory_items_insert_own" ON public.inventory_items FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "inventory_items_update_own" ON public.inventory_items FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "inventory_items_delete_own" ON public.inventory_items FOR DELETE USING (auth.uid() = user_id);
 
 -- Staff members policies
-CREATE POLICY "staff_members_all_access" ON public.staff_members FOR ALL USING (true);
+CREATE POLICY "staff_members_select_own" ON public.staff_members FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "staff_members_insert_own" ON public.staff_members FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "staff_members_update_own" ON public.staff_members FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "staff_members_delete_own" ON public.staff_members FOR DELETE USING (auth.uid() = user_id);
 
--- Attendance policies
-CREATE POLICY "attendance_all_access" ON public.attendance FOR ALL USING (true);
+-- Attendance policies (through staff relationship)
+CREATE POLICY "attendance_select_own" ON public.attendance FOR SELECT 
+USING (EXISTS (SELECT 1 FROM public.staff_members WHERE staff_members.id = attendance.staff_id AND staff_members.user_id = auth.uid()));
+CREATE POLICY "attendance_insert_own" ON public.attendance FOR INSERT 
+WITH CHECK (EXISTS (SELECT 1 FROM public.staff_members WHERE staff_members.id = attendance.staff_id AND staff_members.user_id = auth.uid()));
+CREATE POLICY "attendance_update_own" ON public.attendance FOR UPDATE 
+USING (EXISTS (SELECT 1 FROM public.staff_members WHERE staff_members.id = attendance.staff_id AND staff_members.user_id = auth.uid()));
+CREATE POLICY "attendance_delete_own" ON public.attendance FOR DELETE 
+USING (EXISTS (SELECT 1 FROM public.staff_members WHERE staff_members.id = attendance.staff_id AND staff_members.user_id = auth.uid()));
 
 -- Expenses policies
-CREATE POLICY "expenses_all_access" ON public.expenses FOR ALL USING (true);
+CREATE POLICY "expenses_select_own" ON public.expenses FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "expenses_insert_own" ON public.expenses FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "expenses_update_own" ON public.expenses FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "expenses_delete_own" ON public.expenses FOR DELETE USING (auth.uid() = user_id);
 
 -- Sales reports policies
-CREATE POLICY "sales_reports_all_access" ON public.sales_reports FOR ALL USING (true);
+CREATE POLICY "sales_reports_select_own" ON public.sales_reports FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "sales_reports_insert_own" ON public.sales_reports FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "sales_reports_update_own" ON public.sales_reports FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "sales_reports_delete_own" ON public.sales_reports FOR DELETE USING (auth.uid() = user_id);
 
 -- Settings policies
-CREATE POLICY "settings_all_access" ON public.settings FOR ALL USING (true);
+CREATE POLICY "settings_select_own" ON public.settings FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "settings_insert_own" ON public.settings FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "settings_update_own" ON public.settings FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "settings_delete_own" ON public.settings FOR DELETE USING (auth.uid() = user_id);
 
 -- =====================================================
 -- CREATE FUNCTIONS FOR AUTOMATIC TIMESTAMPS
@@ -305,18 +340,19 @@ CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON public.settings FOR E
 -- INSERT SAMPLE DATA (OPTIONAL)
 -- =====================================================
 -- You can uncomment this section to add sample data for testing
+-- Note: Replace 'sample-user-uuid' with actual Supabase user UUIDs
 
 /*
 -- Sample menu categories
 INSERT INTO public.menu_items (user_id, name, description, price, category, is_available) VALUES
-('sample-user-id', 'Margherita Pizza', 'Classic Italian pizza with tomato and mozzarella', 12.99, 'Pizza', true),
-('sample-user-id', 'Caesar Salad', 'Fresh romaine lettuce with caesar dressing', 8.99, 'Salads', true),
-('sample-user-id', 'Chocolate Cake', 'Rich chocolate cake with vanilla ice cream', 6.99, 'Desserts', true);
+('sample-user-uuid', 'Margherita Pizza', 'Classic Italian pizza with tomato and mozzarella', 12.99, 'Pizza', true),
+('sample-user-uuid', 'Caesar Salad', 'Fresh romaine lettuce with caesar dressing', 8.99, 'Salads', true),
+('sample-user-uuid', 'Chocolate Cake', 'Rich chocolate cake with vanilla ice cream', 6.99, 'Desserts', true);
 
 -- Sample customers
 INSERT INTO public.customers (user_id, name, email, phone) VALUES
-('sample-user-id', 'John Doe', 'john@example.com', '+1234567890'),
-('sample-user-id', 'Jane Smith', 'jane@example.com', '+0987654321');
+('sample-user-uuid', 'John Doe', 'john@example.com', '+1234567890'),
+('sample-user-uuid', 'Jane Smith', 'jane@example.com', '+0987654321');
 */
 
 -- =====================================================
@@ -324,3 +360,4 @@ INSERT INTO public.customers (user_id, name, email, phone) VALUES
 -- =====================================================
 -- Your Supabase database is now ready for your restaurant app!
 -- All tables, indexes, policies, and triggers have been created.
+-- Updated to use pure Supabase authentication instead of Firebase.

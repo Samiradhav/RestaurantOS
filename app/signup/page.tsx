@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Eye, EyeOff, Mail, Lock, User, ChefHat, Building } from "lucide-react"
+import { Eye, EyeOff, Mail, Lock, User, ChefHat, Building, Phone } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { dataService } from "@/lib/data-service"
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,7 @@ export default function SignupPage() {
     name: "",
     email: "",
     restaurantName: "",
+    phone: "", // Add phone field
     password: "",
     confirmPassword: "",
   })
@@ -43,9 +44,41 @@ export default function SignupPage() {
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
-        options: { data: { name: formData.name, restaurant_name: formData.restaurantName } }
+        options: { 
+          data: { 
+            name: formData.name, 
+            restaurant_name: formData.restaurantName,
+            phone: formData.phone // Add phone number
+          } 
+        }
       })
       if (error) throw error
+      
+      // Create user profile immediately after signup
+      if (data.user) {
+        try {
+          const profileResult = await supabase
+            .from('user_profiles')
+            .insert({
+              id: data.user.id,
+              name: formData.name,
+              email: formData.email,
+              restaurant_name: formData.restaurantName,
+              phone: formData.phone,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+          
+          if (profileResult.error) {
+            console.error('Profile creation error:', profileResult.error)
+            // Don't throw here as signup was successful
+          }
+        } catch (profileError) {
+          console.error('Profile creation error:', profileError)
+          // Don't throw here as signup was successful
+        }
+      }
+      
       router.push("/login")
     } catch (error: any) {
       setError(error.message || "Failed to create account")
@@ -60,11 +93,21 @@ export default function SignupPage() {
 
     try {
       const supabase = createClient()
-      const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${location.origin}/dashboard` } })
+      const { data, error } = await supabase.auth.signInWithOAuth({ 
+        provider: "google", 
+        options: { 
+          redirectTo: `https://restaurant-os-theta.vercel.app/dashboard`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent'
+          }
+        } 
+      })
       if (error) throw error
+      // Remove the router.push line - OAuth will handle the redirect automatically
     } catch (error: any) {
+      console.error("Google sign-in error:", error)
       setError(error.message || "Failed to sign in with Google")
-    } finally {
       setLoading(false)
     }
   }
@@ -146,6 +189,22 @@ export default function SignupPage() {
                   placeholder="Enter your email"
                   value={formData.email}
                   onChange={(e) => updateFormData("email", e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Enter your phone number"
+                  value={formData.phone}
+                  onChange={(e) => updateFormData("phone", e.target.value)}
                   className="pl-10"
                   required
                 />

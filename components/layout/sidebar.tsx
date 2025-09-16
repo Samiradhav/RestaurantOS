@@ -18,6 +18,7 @@ import {
   UserCheck,
   TrendingUp,
   AlertTriangle,
+  MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/lib/shared-state"
@@ -40,6 +41,7 @@ const navigationItems: NavigationItem[] = [
   { name: "Inventory", href: "/dashboard/inventory", icon: Package, description: "Stock management" },
   { name: "Reports", href: "/dashboard/reports", icon: TrendingUp, description: "Sales and analytics" },
   { name: "Staff", href: "/dashboard/staff", icon: UserCheck, description: "Staff management" },
+  { name: "Community", href: "/dashboard/community", icon: MessageSquare, description: "Connect with other restaurants" },
   { name: "Profile", href: "/dashboard/profile", icon: User, description: "User profile" },
   { name: "Settings", href: "/dashboard/settings", icon: Settings, description: "App settings" },
 ]

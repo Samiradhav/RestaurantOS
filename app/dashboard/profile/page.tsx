@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { User, Mail, Phone, MapPin, Building, Edit, Save, X, Camera, CheckCircle, DollarSign, Users } from "lucide-react"
+import { User, Mail, Phone, MapPin, Building, Edit, Save, X, Camera, CheckCircle, IndianRupee, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -54,21 +54,50 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const loadProfile = async () => {
-      const profile = await supabaseDataService.getUserProfile()
-      if (profile) {
-        setProfileData({
-          name: profile.name || appUser?.displayName || "",
-          email: profile.email || appUser?.email || "",
-          phone: profile.phone || "",
-          address: profile.address || "",
-          restaurantName: profile.restaurant_name || "",
-          bio: "",
-          avatar: appUser?.photoURL || "/placeholder-user.jpg",
-        })
+      try {
+        let profile = await supabaseDataService.getUserProfile()
+        
+        // If no profile exists, create one from auth metadata
+        if (!profile && user) {
+          const authMetadata = user.user_metadata
+          if (authMetadata?.name || authMetadata?.restaurant_name) {
+            const newProfile = await supabaseDataService.createUserProfile({
+              name: authMetadata.name || "",
+              email: user.email || "",
+              restaurant_name: authMetadata.restaurant_name || "",
+              phone: authMetadata.phone || "",
+            })
+            profile = newProfile
+          }
+        }
+        
+        if (profile) {
+          setProfileData({
+            name: profile.name || appUser?.displayName || "",
+            email: profile.email || appUser?.email || "",
+            phone: profile.phone || "",
+            address: profile.address || "",
+            restaurantName: profile.restaurant_name || "",
+            bio: "",
+            avatar: appUser?.photoURL || "/placeholder-user.jpg",
+          })
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error)
+        // Fallback to auth metadata if profile loading fails
+        if (user?.user_metadata) {
+          const metadata = user.user_metadata
+          setProfileData(prev => ({
+            ...prev,
+            name: metadata.name || prev.name,
+            restaurantName: metadata.restaurant_name || prev.restaurantName,
+            phone: metadata.phone || prev.phone,
+          }))
+        }
       }
     }
     loadProfile()
-  }, [appUser])
+  }, [appUser, user])
 
   useEffect(() => {
     const loadRealData = async () => {

@@ -2,7 +2,7 @@
 
 import {
   CalendarIcon,
-  DollarSign,
+  IndianRupee,
   TrendingUp,
   TrendingDown,
   ShoppingCart,
@@ -176,14 +176,14 @@ const ReportsPage = () => {
 
     const csvData = [
       ['Date', reportData.date],
-      ['Total Sales', reportData.totalSales.toString()],
+      ['Total Sales', convertPrice(reportData.totalSales, "INR")],
       ['Total Orders', reportData.totalOrders.toString()],
-      ['Average Order Value', reportData.averageOrderValue.toString()],
-      ['Cash Payments', reportData.cashPayments.toString()],
-      ['Card Payments', reportData.cardPayments.toString()],
-      ['Online Payments', reportData.onlinePayments.toString()],
-      ['Total Expenses', reportData.totalExpenses.toString()],
-      ['Net Profit', reportData.netProfit.toString()],
+      ['Average Order Value', convertPrice(reportData.averageOrderValue, "INR")],
+      ['Cash Payments', convertPrice(reportData.cashPayments, "INR")],
+      ['Card Payments', convertPrice(reportData.cardPayments, "INR")],
+      ['Online Payments', convertPrice(reportData.onlinePayments, "INR")],
+      ['Total Expenses', convertPrice(reportData.totalExpenses, "INR")],
+      ['Net Profit', convertPrice(reportData.netProfit, "INR")],
       ['Total Customers', reportData.totalCustomers.toString()],
       ['Pending Orders', reportData.pendingOrders.toString()],
       ['Completed Orders', reportData.completedOrders.toString()],
@@ -194,7 +194,7 @@ const ReportsPage = () => {
       ...reportData.topSellingItems.map(item => [
         item.name,
         item.quantity.toString(),
-        item.revenue.toString()
+        convertPrice(item.revenue, "INR")
       ])
     ]
 
@@ -292,11 +292,11 @@ const ReportsPage = () => {
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Total Sales
                 </CardTitle>
-                <DollarSign className="h-4 w-4 text-green-500" />
+                <IndianRupee className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-foreground">
-                  {convertPrice(reportData.totalSales)}
+                  {convertPrice(reportData.totalSales, "INR")}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {reportData.totalOrders} orders
@@ -320,7 +320,7 @@ const ReportsPage = () => {
                   "text-2xl font-bold",
                   reportData.netProfit >= 0 ? "text-green-500" : "text-red-500"
                 )}>
-                  {convertPrice(reportData.netProfit)}
+                  {convertPrice(reportData.netProfit, "INR")}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   After expenses
@@ -337,7 +337,7 @@ const ReportsPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-foreground">
-                  {convertPrice(reportData.averageOrderValue)}
+                  {convertPrice(reportData.averageOrderValue, "INR")}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Per transaction
@@ -369,7 +369,7 @@ const ReportsPage = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
+                  <IndianRupee className="h-5 w-5" />
                   Payment Methods
                 </CardTitle>
               </CardHeader>
@@ -377,19 +377,19 @@ const ReportsPage = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Cash</span>
                   <span className="font-medium text-foreground">
-                    {convertPrice(reportData.cashPayments)}
+                    {convertPrice(reportData.cashPayments, "INR")}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Card</span>
                   <span className="font-medium text-foreground">
-                    {convertPrice(reportData.cardPayments)}
+                    {convertPrice(reportData.cardPayments, "INR")}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Online</span>
                   <span className="font-medium text-foreground">
-                    {convertPrice(reportData.onlinePayments)}
+                    {convertPrice(reportData.onlinePayments, "INR")}
                   </span>
                 </div>
               </CardContent>
@@ -456,7 +456,7 @@ const ReportsPage = () => {
                       </div>
                       <div className="text-right">
                         <div className="font-medium text-foreground">
-                          {convertPrice(item.revenue)}
+                          {convertPrice(item.revenue, "INR")}
                         </div>
                       </div>
                     </div>
@@ -477,7 +477,7 @@ const ReportsPage = () => {
             <CardContent>
               <div className="text-center py-8">
                 <div className="text-2xl font-bold text-foreground">
-                  {convertPrice(reportData.totalExpenses)}
+                  {convertPrice(reportData.totalExpenses, "INR")}
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Total expenses for {format(selectedDate, "MMMM d, yyyy")}

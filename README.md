@@ -44,16 +44,24 @@ A comprehensive restaurant management system built with Next.js, featuring Fireb
 5. Run development server: `npm run dev`
 
 ### Environment Variables
-\`\`\`env
-# Firebase Configuration (already configured)
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_domain
-# ... other Firebase config
+Create a `.env.local` file in your project root with the following variables:
 
-# Optional: n8n Webhook URL (already configured)
-NEXT_PUBLIC_N8N_WEBHOOK=your_webhook_url
-\`\`\`
+```env
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
+# Optional: n8n Webhook URL
+NEXT_PUBLIC_N8N_WEBHOOK=your_n8n_webhook_url
+```
+
+### Supabase Setup
+1. Go to [Supabase](https://supabase.com) and create a new project
+2. Go to Settings → API to get your project URL and anon key
+3. Add these to your `.env.local` file
+4. Go to Authentication → Providers → Google and enable Google OAuth
+5. Add your Google OAuth credentials from Google Cloud Console
+6. Set the redirect URL to: `https://your-domain.com/auth/callback`
 ## 📱 Usage Guide
 
 ### Getting Started
@@ -102,11 +110,6 @@ NEXT_PUBLIC_N8N_WEBHOOK=your_webhook_url
    - Free tier: 25GB storage, 25GB bandwidth
    - Image optimization and transformation
    - Easy integration
-
-3. **Firebase Storage**
-   - Free tier: 5GB storage, 1GB/day downloads
-   - Integrated with Firebase ecosystem
-   - Security rules support
 
 ### Deployment Options
 1. **Vercel** (Recommended)

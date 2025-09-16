@@ -1,7 +1,7 @@
 "use client"
 
 import {
-  DollarSign,
+  IndianRupee,
   Users,
   ShoppingCart,
   AlertTriangle,
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Modal } from "@/components/ui/modal"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { NotificationCenter, useNotifications } from "@/components/notifications"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useToast } from "@/hooks/use-toast"
 import { FloatingChatbot } from "@/components/chatbot/floating-chatbot"
@@ -163,6 +164,7 @@ export default function DashboardPage() {
     const [dataError, setDataError] = useState<string | null>(null)
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const { notifications, addNotification, markAsRead, clearAll } = useNotifications()
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -204,6 +206,44 @@ export default function DashboardPage() {
     loadAllData()
   }, [])
 
+  // Add notification triggers
+  useEffect(() => {
+    if (orders.length > 0) {
+      // Check for new orders (pending status)
+      const newOrders = orders.filter(order => 
+        order.status === 'pending' && 
+        new Date(order.created_at).getTime() > Date.now() - 60000 // Last minute
+      )
+      
+      newOrders.forEach(order => {
+        addNotification({
+          type: 'order',
+          title: 'New Order Received',
+          message: `Order #${order.order_number} from ${customers.find(c => c.id === order.customer_id)?.name || 'Customer'}`,
+          actionUrl: '/dashboard/orders'
+        })
+      })
+    }
+  }, [orders, customers, addNotification])
+
+  // Check for low stock items
+  useEffect(() => {
+    if (inventory.length > 0) {
+      const lowStockItems = inventory.filter(item => 
+        item.current_stock < item.min_stock_level
+      )
+      
+      if (lowStockItems.length > 0) {
+        addNotification({
+          type: 'stock',
+          title: 'Low Stock Alert',
+          message: `${lowStockItems.length} item(s) are running low on stock`,
+          actionUrl: '/dashboard/inventory'
+        })
+      }
+    }
+  }, [inventory, addNotification])
+
     // ✅ Fix: Only render framer-motion components after hydration
     useEffect(() => {
       setIsClient(true)
@@ -237,9 +277,9 @@ export default function DashboardPage() {
       // Total customers
       const totalCustomers = customers.length
 
-      // Pending orders (including confirmed, preparing, ready but not delivered/cancelled)
+      // Pending orders (only orders that are not yet completed - pending, confirmed, preparing)
       const pendingOrders = orders.filter(order => 
-        ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status)
+        ['pending', 'confirmed', 'preparing'].includes(order.status)
       ).length
 
       // Low stock items
@@ -315,10 +355,10 @@ export default function DashboardPage() {
   const statCards = [
     {
       title: "Total Sales",
-      value: stats.totalSales > 0 ? convertPrice(stats.totalSales) : "$0.00",
+      value: stats.totalSales > 0 ? convertPrice(stats.totalSales, "INR") : "₹0",
       change: "+12.5%",
       changeType: "positive" as const,
-      icon: DollarSign,
+      icon: IndianRupee,
       color: "text-green-500",
     },
     {
@@ -435,6 +475,11 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <NotificationCenter 
+            notifications={notifications}
+            onMarkAsRead={markAsRead}
+            onClearAll={clearAll}
+          />
           <Button variant="outline" className="gap-2 bg-transparent">
             <Calendar className="h-4 w-4" />
             Today
@@ -552,7 +597,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-right">
                         <div className="font-medium text-foreground">
-                          {convertPrice(order.total)}
+                          {convertPrice(order.total, "INR")}
                         </div>
                         <div className="text-xs text-muted-foreground">{order.time}</div>
                       </div>
@@ -590,7 +635,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Average Order</span>
                 <span className="font-medium text-foreground">
-                  {stats.averageOrderValue > 0 ? convertPrice(stats.averageOrderValue) : "$0.00"}
+                  {stats.averageOrderValue > 0 ? convertPrice(stats.averageOrderValue, "INR") : "₹0"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -600,7 +645,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Monthly Revenue</span>
                 <span className="font-medium text-primary">
-                  {convertPrice(stats.monthlyRevenue)}
+                  {convertPrice(stats.monthlyRevenue, "INR")}
                 </span>
               </div>
             </CardContent>

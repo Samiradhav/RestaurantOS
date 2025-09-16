@@ -1,12 +1,11 @@
 import { create } from "zustand"
 
 interface Customer {
-  id: number
+  id: string
   name: string
   phone: string
   email: string
   address: string
-  billNo: string
   totalOrders: number
   lastOrder: string
 }
@@ -15,12 +14,12 @@ interface CustomerStore {
   customers: Customer[]
   setCustomers: (customers: Customer[]) => void
   addCustomer: (customer: Customer) => void
-  updateCustomer: (id: number, customer: Partial<Customer>) => void
-  deleteCustomer: (id: number) => void
+  updateCustomer: (id: string, customer: Partial<Customer>) => void
+  deleteCustomer: (id: string) => void
 }
 
 interface MenuItem {
-  id: number
+  id: string
   name: string
   category: string
   price: number
@@ -30,10 +29,10 @@ interface MenuItem {
 }
 
 interface Order {
-  id: number
+  id: string
   orderNo: string
   customer: string
-  customerId: number
+  customerId: string
   items: string[]
   total: number
   status: string
@@ -42,7 +41,7 @@ interface Order {
 }
 
 interface InventoryItem {
-  id: number
+  id: string
   name: string
   category: string
   currentStock: number
@@ -66,14 +65,14 @@ interface RestaurantStore {
   addMenuItem: (menuItem: MenuItem) => void
   addOrder: (order: Order) => void
   addInventoryItem: (item: InventoryItem) => void
-  updateCustomer: (id: number, customer: Partial<Customer>) => void
-  updateMenuItem: (id: number, menuItem: Partial<MenuItem>) => void
-  updateOrder: (id: number, order: Partial<Order>) => void
-  updateInventoryItem: (id: number, item: Partial<InventoryItem>) => void
-  deleteCustomer: (id: number) => void
-  deleteMenuItem: (id: number) => void
-  deleteOrder: (id: number) => void
-  deleteInventoryItem: (id: number) => void
+  updateCustomer: (id: string, customer: Partial<Customer>) => void
+  updateMenuItem: (id: string, menuItem: Partial<MenuItem>) => void
+  updateOrder: (id: string, order: Partial<Order>) => void
+  updateInventoryItem: (id: string, item: Partial<InventoryItem>) => void
+  deleteCustomer: (id: string) => void
+  deleteMenuItem: (id: string) => void
+  deleteOrder: (id: string) => void
+  deleteInventoryItem: (id: string) => void
 }
 
 export const useCustomerStore = create<CustomerStore>((set) => ({

@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useCallback } from "react"
 import { motion } from "framer-motion"
-import { Plus, Edit, Trash2, DollarSign, Package } from "lucide-react"
+import { Plus, Edit, Trash2, IndianRupee, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -73,9 +73,9 @@ const MenuForm = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="price">Price ($)</Label>
+          <Label htmlFor="price">Price (₹)</Label>
           <div className="relative">
-            <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <IndianRupee className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="price"
               type="number"
