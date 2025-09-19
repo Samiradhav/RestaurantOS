@@ -24,6 +24,7 @@ interface LocalOrder {
   total: number
   status: "pending" | "preparing" | "completed" | "cancelled"
   paymentMethod?: "cash" | "online" | "card"
+  payment_status?: "pending" | "paid" | "refunded"
   date: string
   time: string
 }
@@ -86,6 +87,7 @@ export default function OrdersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState("")
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
   const [isLoadingMenuItems, setIsLoadingMenuItems] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"cash" | "card" | "online">("cash")
 
   // Use currency hook
   const { formatPrice } = useCurrency()
@@ -304,6 +306,70 @@ export default function OrdersPage() {
     setIsNewOrderModalOpen(false)
     setSelectedCustomer("")
     setOrderItems([])
+  }
+
+  // Handle update payment status
+  const updatePaymentStatus = async (orderId: string, paymentStatus: "pending" | "paid" | "refunded") => {
+    try {
+      const success = await supabaseDataService.updateOrder(orderId, { 
+        payment_status: paymentStatus 
+      })
+      
+      if (success) {
+        // Update local state
+        setOrderList(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, payment_status: paymentStatus }
+              : order
+          )
+        )
+        
+        // Update viewing order if it's the current one
+        if (viewingOrder && viewingOrder.id === orderId) {
+          setViewingOrder(prev => prev ? { ...prev, payment_status: paymentStatus } : null)
+        }
+        
+        toast.success(`Payment status updated to ${paymentStatus}`)
+      } else {
+        toast.error("Failed to update payment status")
+      }
+    } catch (error) {
+      console.error("Error updating payment status:", error)
+      toast.error("Failed to update payment status")
+    }
+  }
+
+  // Handle update payment method
+  const updatePaymentMethod = async (orderId: string, paymentMethod: "cash" | "online" | "card") => {
+    try {
+      const success = await supabaseDataService.updateOrder(orderId, { 
+        payment_method: paymentMethod 
+      })
+      
+      if (success) {
+        // Update local state
+        setOrderList(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, paymentMethod: paymentMethod }
+              : order
+          )
+        )
+        
+        // Update viewing order if it's the current one
+        if (viewingOrder && viewingOrder.id === orderId) {
+          setViewingOrder(prev => prev ? { ...prev, paymentMethod: paymentMethod } : null)
+        }
+        
+        toast.success(`Payment method updated to ${paymentMethod}`)
+      } else {
+        toast.error("Failed to update payment method")
+      }
+    } catch (error) {
+      console.error("Error updating payment method:", error)
+      toast.error("Failed to update payment method")
+    }
   }
 
   const columns = [
@@ -596,6 +662,21 @@ export default function OrdersPage() {
             </div>
           </div>
 
+          {/* Payment Method Selection */}
+          <div className="space-y-2">
+            <Label>Payment Method *</Label>
+            <Select value={selectedPaymentMethod} onValueChange={(value: "cash" | "card" | "online") => setSelectedPaymentMethod(value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select payment method" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash"> Cash</SelectItem>
+                <SelectItem value="card">💳 Card</SelectItem>
+                <SelectItem value="online">📱 Online/UPI</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Actions */}
           <div className="flex gap-3 pt-4">
             <Button
@@ -680,6 +761,60 @@ export default function OrdersPage() {
                     {item}
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Payment Status & Method */}
+            <div className="space-y-3 border-t pt-4">
+              <Label className="text-sm font-medium">Payment Information</Label>
+              
+              {/* Payment Status */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Payment Status</Label>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm"
+                    variant={viewingOrder.payment_status === 'paid' ? 'default' : 'outline'}
+                    onClick={() => updatePaymentStatus(viewingOrder.id, 'paid')}
+                    className="flex-1"
+                  >
+                    ✅ Paid
+                  </Button>
+                  <Button 
+                    size="sm"
+                    variant={viewingOrder.payment_status === 'pending' ? 'destructive' : 'outline'}
+                    onClick={() => updatePaymentStatus(viewingOrder.id, 'pending')}
+                    className="flex-1"
+                  >
+                    ⏳ Pending
+                  </Button>
+                  <Button 
+                    size="sm"
+                    variant={viewingOrder.payment_status === 'refunded' ? 'secondary' : 'outline'}
+                    onClick={() => updatePaymentStatus(viewingOrder.id, 'refunded')}
+                    className="flex-1"
+                  >
+                    ↩️ Refunded
+                  </Button>
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Payment Method</Label>
+                <Select 
+                  value={viewingOrder.paymentMethod || 'cash'} 
+                  onValueChange={(value: "cash" | "online" | "card") => updatePaymentMethod(viewingOrder.id, value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">💵 Cash</SelectItem>
+                    <SelectItem value="card">💳 Card</SelectItem>
+                    <SelectItem value="online">📱 Online/UPI</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

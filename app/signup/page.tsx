@@ -57,6 +57,9 @@ export default function SignupPage() {
       // Create user profile immediately after signup
       if (data.user) {
         try {
+          const trialEndDate = new Date()
+          trialEndDate.setDate(trialEndDate.getDate() + 7) // 7 days trial
+          
           const profileResult = await supabase
             .from('user_profiles')
             .insert({
@@ -65,6 +68,9 @@ export default function SignupPage() {
               email: formData.email,
               restaurant_name: formData.restaurantName,
               phone: formData.phone,
+              is_subscribed: false,
+              trial_end_date: trialEndDate.toISOString(),
+              subscription_status: 'trial',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })

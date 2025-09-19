@@ -11,6 +11,9 @@ import {
   Package,
   CheckCircle,
   Loader2,
+  MessageSquare,
+  CreditCard,
+  Bell,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,6 +29,7 @@ import { supabaseDataService, type Order, type Customer, type MenuItem, type Inv
 import React from "react"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
+import { useAuth } from "@/hooks/use-auth"
 
 // Local interfaces for dashboard calculations
 interface DashboardStats {
@@ -151,6 +155,7 @@ const InventoryForm = React.memo(({
 export default function DashboardPage() {
   const { toast: shadcnToast } = useToast()
   const { convertPrice } = useCurrency()
+  const { subscriptionStatus } = useAuth() // Add this
 
   const [isClient, setIsClient] = useState(false)
 
@@ -243,6 +248,41 @@ export default function DashboardPage() {
       }
     }
   }, [inventory, addNotification])
+
+  // Add subscription notifications
+  useEffect(() => {
+    if (subscriptionStatus) {
+      // Trial expiring notification
+      if (subscriptionStatus.isTrialActive && subscriptionStatus.trialDaysLeft && subscriptionStatus.trialDaysLeft <= 3) {
+        addNotification({
+          type: 'subscription',
+          title: 'Trial Ending Soon',
+          message: `Your free trial expires in ${subscriptionStatus.trialDaysLeft} days. Subscribe for ₹99/month to keep all features.`,
+          actionUrl: '/subscription'
+        })
+      }
+
+      // Subscription activated notification
+      if (subscriptionStatus.isSubscribed && subscriptionStatus.subscriptionStatus === 'active') {
+        addNotification({
+          type: 'subscription',
+          title: 'Premium Access Activated! 🎉',
+          message: 'You now have access to all premium features for ₹99/month.',
+          actionUrl: '/dashboard'
+        })
+      }
+
+      // Subscription cancelled notification
+      if (subscriptionStatus.subscriptionStatus === 'cancelled') {
+        addNotification({
+          type: 'subscription',
+          title: 'Subscription Cancelled',
+          message: 'Your subscription has been cancelled. Resubscribe for ₹99/month to regain premium access.',
+          actionUrl: '/subscription'
+        })
+      }
+    }
+  }, [subscriptionStatus, addNotification])
 
     // ✅ Fix: Only render framer-motion components after hydration
     useEffect(() => {

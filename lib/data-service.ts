@@ -6,6 +6,14 @@ export interface UserProfile {
   name: string
   email: string
   restaurant_name: string
+  phone?: string
+  address?: string
+  is_subscribed?: boolean
+  trial_end_date?: string
+  razorpay_customer_id?: string
+  razorpay_subscription_id?: string
+  subscription_plan?: string
+  subscription_status?: string
   created_at: string
   updated_at: string
 }

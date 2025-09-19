@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { Suspense } from "react"
-import { ProtectedRoute } from "@/components/auth/protected-route"
+import { SubscriptionGuard } from "@/components/auth/subscription-guard"
 import { Navbar } from "@/components/layout/navbar"
 import { Sidebar } from "@/components/layout/sidebar"
 import { FloatingChatbot } from "@/components/chatbot/floating-chatbot"
@@ -13,7 +13,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <ProtectedRoute>
+    <SubscriptionGuard>
       <div className="min-h-screen bg-background">
         <Sidebar />
         <div className="lg:pl-64">
@@ -30,6 +30,6 @@ export default function DashboardLayout({
         </div>
         <FloatingChatbot />
       </div>
-    </ProtectedRoute>
+    </SubscriptionGuard>
   )
 }

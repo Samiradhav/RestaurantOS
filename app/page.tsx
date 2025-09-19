@@ -12,15 +12,10 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!loading) {
-      if (user) {
-        // Redirect authenticated users to dashboard
-        router.push("/dashboard")
-      } else {
-        // Redirect unauthenticated users to login
-        router.push("/login")
-      }
+      // Always redirect to login first - subscription checks happen later
+      router.push("/login")
     }
-  }, [user, loading, router])
+  }, [loading, router])
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">

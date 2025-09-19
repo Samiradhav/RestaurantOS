@@ -1,14 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false,
+  reactStrictMode: true, // Re-enable React Strict Mode
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
-    // The 'swcMinify: true' option is no longer needed and should be removed.
-  // swcMinify: true, 
+  // Remove CSP headers from here - handled in middleware.ts
   experimental: {
     optimizePackageImports: [
       "lucide-react",

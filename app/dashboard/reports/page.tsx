@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useState, useEffect, useMemo } from "react"
@@ -50,6 +51,16 @@ interface DailyReportData {
     card: number
     online: number
   }
+  detailedOrders: Array<{
+    orderNumber: string
+    customerName: string
+    items: string[]
+    total: number
+    paymentStatus: string
+    paymentMethod: string
+    status: string
+    orderTime: string
+  }>
 }
 
 const ReportsPage = () => {
@@ -149,7 +160,17 @@ const ReportsPage = () => {
           cash: paymentBreakdown.cash || 0,
           card: paymentBreakdown.card || 0,
           online: paymentBreakdown.online || 0,
-        }
+        },
+        detailedOrders: dayOrders.map(order => ({
+          orderNumber: order.id,
+          customerName: customersData.find(c => c.id === order.customer_id)?.name || 'N/A',
+          items: order.items.map(item => `${item.name} x${item.quantity}`),
+          total: order.total_amount,
+          paymentStatus: order.payment_status || 'pending',
+          paymentMethod: order.payment_method || 'cash',
+          status: order.status,
+          orderTime: new Date(order.created_at).toLocaleTimeString(),
+        }))
       }
 
       setReportData(report)
@@ -483,6 +504,56 @@ const ReportsPage = () => {
                   Total expenses for {format(selectedDate, "MMMM d, yyyy")}
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Detailed Orders */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                Order Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {reportData.detailedOrders.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No orders for this date
+                </div>
+              ) : (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {reportData.detailedOrders.map((order, index) => (
+                    <div key={index} className="border rounded-lg p-4 space-y-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">{order.customerName}</div>
+                          <div className="text-sm text-muted-foreground">Order #{order.orderNumber}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">{convertPrice(order.total, "INR")}</div>
+                          <div className="text-sm text-muted-foreground">{order.orderTime}</div>
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <strong>Items:</strong> {order.items.join(", ")}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <Badge variant={order.status === 'completed' ? 'default' : 'secondary'}>
+                          {order.status}
+                        </Badge>
+                        <div className="flex gap-2">
+                          <Badge variant={order.paymentStatus === 'paid' ? 'default' : 'destructive'}>
+                            {order.paymentStatus === 'paid' ? '💰 Paid' : order.paymentStatus === 'refunded' ? '↩️ Refunded' : '⏳ Pending'}
+                          </Badge>
+                          <Badge variant="outline">
+                            {order.paymentMethod === 'cash' ? '💵' : order.paymentMethod === 'card' ? '💳' : '📱'} {order.paymentMethod}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>

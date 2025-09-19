@@ -19,6 +19,9 @@ import {
   Download,
   Eye,
   EyeOff,
+  CreditCard,
+  Clock,
+  ChefHat,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +38,8 @@ import { useCurrency, type Currency } from "@/lib/currency-store"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
+import { subscriptionService } from "@/lib/subscription-service"
+import { useRouter } from "next/navigation"
 
 export default function SettingsPage() {
   const { customers, menuItems, orders, inventory } = useRestaurantStore()
@@ -43,6 +48,7 @@ export default function SettingsPage() {
   const { user, logout } = useAuth()
   const { toast } = useToast()
   const supabase = createClient()
+  const router = useRouter()
 
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -87,6 +93,14 @@ export default function SettingsPage() {
 
   // Validation states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+
+  // Add subscription management states
+  const { user: currentUser, subscriptionStatus, refreshSubscriptionStatus } = useAuth()
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [showRefundModal, setShowRefundModal] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [refundReason, setRefundReason] = useState('')
+  const [refundAmount, setRefundAmount] = useState('')
 
   // Load restaurant profile and settings from Supabase
   useEffect(() => {
@@ -711,6 +725,98 @@ export default function SettingsPage() {
     confirmPassword: "",
   })
 
+  // Add subscription management functions
+  const handleCancelSubscription = async () => {
+    if (!cancelReason.trim()) {
+      toast({
+        title: "Reason Required",
+        description: "Please provide a reason for cancellation.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await subscriptionService.cancelSubscription(user!.id)
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: user!.id,
+          type: 'subscription',
+          title: 'Subscription Cancelled',
+          message: `Your subscription has been cancelled. Reason: ${cancelReason}`,
+          action_url: '/subscription',
+          created_at: new Date().toISOString()
+        })
+
+      toast({
+        title: "Subscription Cancelled",
+        description: "Your subscription has been cancelled. You'll retain access until the end of your billing period.",
+      })
+
+      setShowCancelModal(false)
+      setCancelReason('')
+      await refreshSubscriptionStatus()
+
+    } catch (error: any) {
+      console.error('Error cancelling subscription:', error)
+      toast({
+        title: "Cancellation Failed",
+        description: error.message || "Failed to cancel subscription. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleRefundRequest = async () => {
+    if (!refundReason.trim()) {
+      toast({
+        title: "Reason Required",
+        description: "Please provide a reason for the refund request.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      // Create refund request notification for admin
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: user!.id,
+          type: 'system',
+          title: 'Refund Request Submitted',
+          message: `Refund requested: ${refundReason}. Amount: ₹${refundAmount || 'Full'}`,
+          action_url: '/dashboard',
+          created_at: new Date().toISOString()
+        })
+
+      toast({
+        title: "Refund Request Submitted",
+        description: "Your refund request has been submitted. We'll review it within 2-3 business days.",
+      })
+
+      setShowRefundModal(false)
+      setRefundReason('')
+      setRefundAmount('')
+
+    } catch (error: any) {
+      console.error('Error submitting refund request:', error)
+      toast({
+        title: "Request Failed",
+        description: error.message || "Failed to submit refund request. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <motion.div
@@ -1076,6 +1182,88 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  Subscription Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {subscriptionStatus ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Current Plan</Label>
+                        <div className="text-lg font-semibold">
+                          {subscriptionStatus.subscriptionPlan ? '₹99/month' : 'Free Trial'}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Status</Label>
+                        <div className={`text-lg font-semibold ${
+                          subscriptionStatus.isSubscribed ? 'text-green-600' : 
+                          subscriptionStatus.isTrialActive ? 'text-blue-600' : 'text-orange-600'
+                        }`}>
+                          {subscriptionStatus.isSubscribed ? 'Active' : 
+                           subscriptionStatus.isTrialActive ? 'Trial' : 'Expired'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {subscriptionStatus.trialDaysLeft > 0 && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <span className="text-blue-800">
+                            {subscriptionStatus.trialDaysLeft} days left in trial
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      {subscriptionStatus.isSubscribed && (
+                        <>
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowCancelModal(true)}
+                            disabled={isSaving}
+                            className="flex-1"
+                          >
+                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            Cancel Subscription
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowRefundModal(true)}
+                            disabled={isSaving}
+                            className="flex-1"
+                          >
+                            Request Refund
+                          </Button>
+                        </>
+                      )}
+                      {!subscriptionStatus.isSubscribed && !subscriptionStatus.isTrialActive && (
+                        <Button
+                          onClick={() => router.push('/subscription')}
+                          className="w-full"
+                        >
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          Subscribe Now - ₹99/month
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                    <p>Loading subscription details...</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </motion.div>
         </div>
       )}
@@ -1224,6 +1412,124 @@ export default function SettingsPage() {
               onClick={() => {
                 setIsDeleteAccountModalOpen(false)
                 setDeleteConfirmation("")
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Cancel Subscription Modal */}
+      <Modal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        title="Cancel Subscription"
+      >
+        <div className="space-y-4">
+          <div className="text-center">
+            <AlertTriangle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-orange-700 mb-2">
+              Are you sure you want to cancel your subscription?
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              You'll lose access to all premium features after your current billing period ends.
+              You can resubscribe anytime.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cancelReason">Reason for cancellation (optional)</Label>
+            <Textarea
+              id="cancelReason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Please let us know why you're cancelling..."
+              rows={3}
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="destructive"
+              onClick={handleCancelSubscription}
+              disabled={isSaving || !cancelReason.trim()}
+              className="flex-1"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Cancel Subscription
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCancelModal(false)
+                setCancelReason('')
+              }}
+              className="flex-1"
+            >
+              Keep Subscription
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Refund Request Modal */}
+      <Modal
+        isOpen={showRefundModal}
+        onClose={() => setShowRefundModal(false)}
+        title="Request Refund"
+      >
+        <div className="space-y-4">
+          <div className="text-center">
+            <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CreditCard className="h-6 w-6 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">
+              Request a Refund
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              We'll review your refund request within 2-3 business days.
+              Refunds are processed according to our refund policy.
+            </p>
+          </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="refundAmount">Refund Amount (₹)</Label>
+              <Input
+                id="refundAmount"
+                type="number"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+                placeholder="Leave empty for full refund"
+                min="1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="refundReason">Reason for refund *</Label>
+              <Textarea
+                id="refundReason"
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+                placeholder="Please explain why you're requesting a refund..."
+                rows={4}
+                required
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              onClick={handleRefundRequest}
+              disabled={isSaving || !refundReason.trim()}
+              className="flex-1"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Submit Refund Request
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowRefundModal(false)
+                setRefundReason('')
+                setRefundAmount('')
               }}
               className="flex-1"
             >

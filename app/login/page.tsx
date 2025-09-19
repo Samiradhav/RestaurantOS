@@ -1,12 +1,13 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { Eye, EyeOff, Mail, Lock, ChefHat } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,6 +20,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+  const { user, subscriptionStatus, checkAndRedirect } = useAuth()
+
+  // Check if user is already authenticated when component mounts
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (user) {
+        // User is already authenticated, check subscription and redirect
+        await checkAndRedirect(router)
+      }
+    }
+    checkAuth()
+  }, [user, subscriptionStatus, checkAndRedirect, router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,9 +40,14 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
-      router.push("/dashboard")
+
+      // After successful login, redirect to dashboard
+      // Subscription checks happen at dashboard level
+      if (data.user) {
+        router.push("/dashboard")
+      }
     } catch (error: any) {
       setError(error.message || "Failed to sign in")
     } finally {
@@ -43,14 +61,30 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
-      const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `https://restaurant-os-theta.vercel.app/dashboard` } })
+      const { data, error } = await supabase.auth.signInWithOAuth({ 
+        provider: "google", 
+        options: { 
+          redirectTo: `${window.location.origin}/auth/callback` 
+        } 
+      })
       if (error) throw error
-      // OAuth will automatically redirect to /dashboard after successful authentication
+      // OAuth will automatically redirect after successful authentication
     } catch (error: any) {
       setError(error.message || "Failed to sign in with Google")
-    } finally {
       setLoading(false)
     }
+  }
+
+  // If user is already authenticated, show loading while redirecting
+  if (user && !loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Redirecting...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
