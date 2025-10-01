@@ -28,9 +28,9 @@ export class SubscriptionService {
   public readonly SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
     monthly: {
       id: 'monthly',
-      razorpay_plan_id: 'plan_RIeYhI8swV5lFy', // Your actual Razorpay plan ID
+      razorpay_plan_id: 'plan_XXXXXXXXXXXXXXX', // ← Update this with your actual plan ID
       name: 'Monthly Subscription',
-      amount: 9900, // ₹99 (changed from ₹999 to ₹99)
+      amount: 9900, // ₹99
       currency: 'INR',
       interval: 'month',
       description: 'Full access to all restaurant management features',

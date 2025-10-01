@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { motion } from "framer-motion"
 import { useTheme } from "next-themes"
 import {
@@ -12,7 +13,7 @@ import {
   User,
   Shield,
   ExternalLink,
-  Link,
+  Link as LinkIcon,
   CheckCircle,
   Loader2,
   AlertTriangle,
@@ -43,7 +44,7 @@ import { useRouter } from "next/navigation"
 
 export default function SettingsPage() {
   const { customers, menuItems, orders, inventory } = useRestaurantStore()
-  const { currency, setCurrency } = useCurrency()
+  const { currency } = useCurrency()
   const { theme, setTheme } = useTheme()
   const { user, logout } = useAuth()
   const { toast } = useToast()
@@ -159,7 +160,7 @@ export default function SettingsPage() {
             ...(settingsMap.notifications || {}),
           } as NotificationSettings,
           business: {
-            currency: (settingsMap.business?.currency as Currency) || currency || "USD",
+            currency: (settingsMap.business?.currency as Currency) || currency || "INR",
             timezone: settingsMap.business?.timezone || "America/New_York",
             taxRate: settingsMap.business?.taxRate || "8.5",
             serviceCharge: settingsMap.business?.serviceCharge || "15",
@@ -175,8 +176,9 @@ export default function SettingsPage() {
         // Apply currency if saved and different from current
         if (settingsMap.business?.currency && settingsMap.business.currency !== currency) {
           const savedCurrency = settingsMap.business.currency as Currency
-          if (["USD", "INR"].includes(savedCurrency)) {
-            setCurrency(savedCurrency)
+          if (["INR"].includes(savedCurrency)) {
+            // Currency is read-only in the store, no setter available
+            console.log('Currency setting loaded:', savedCurrency)
           }
         }
 
@@ -193,7 +195,7 @@ export default function SettingsPage() {
     }
 
     loadSettings()
-  }, [toast, setTheme, currency, setCurrency]) // Removed 'theme' from dependencies
+  }, [toast, setTheme, currency]) // Removed 'theme' and 'setCurrency' from dependencies
 
   // Validation functions
   const validateEmail = (email: string) => {
@@ -257,12 +259,11 @@ export default function SettingsPage() {
 
     // Special handling for currency changes
     if (section === "business" && key === "currency") {
-      const validCurrencies: Currency[] = ["USD", "INR"]
+      const validCurrencies: Currency[] = ["INR"]
       if (validCurrencies.includes(value)) {
-        setCurrency(value as Currency)
         toast({
-          title: "Currency Updated",
-          description: `Currency changed to ${value}. This will be applied to all price displays.`,
+          title: "Currency Setting Saved",
+          description: `Currency setting updated to ${value}. All prices are displayed in INR.`,
         })
       }
     }
@@ -979,7 +980,6 @@ export default function SettingsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="USD">USD ($) - US Dollar</SelectItem>
                         <SelectItem value="INR">INR (₹) - Indian Rupee</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1262,6 +1262,44 @@ export default function SettingsPage() {
                     <p>Loading subscription details...</p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Legal & Policies
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Link href="/terms" className="block">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start bg-transparent"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Terms of Service
+                  </Button>
+                </Link>
+                <Link href="/privacy" className="block">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start bg-transparent"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Privacy Policy
+                  </Button>
+                </Link>
+                <Link href="/refund-policy" className="block">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start bg-transparent"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Refund Policy
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           </motion.div>

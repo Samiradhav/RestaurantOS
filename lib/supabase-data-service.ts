@@ -98,9 +98,8 @@ export interface InventoryItem {
   selling_price?: number
   supplier?: string
   supplier_contact?: string
-  expiry_date?: string
   location?: string
-  barcode?: string
+  expiry_date?: string
   created_at: string
   updated_at: string
 }
@@ -471,9 +470,9 @@ export class SupabaseDataService {
   // =====================================================
 
   /**
-   * Get menu items for current user with user isolation
+   * Get menu items for current user with pagination for better performance
    */
-  async getMenuItems(): Promise<MenuItem[]> {
+  async getMenuItems(limit: number = 100): Promise<MenuItem[]> {
     const userId = await this.getCurrentUserId()
     if (!userId) return []
 
@@ -482,6 +481,7 @@ export class SupabaseDataService {
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
+      .limit(limit)
 
     if (error) {
       console.error('Error fetching menu items:', error)
@@ -2540,6 +2540,95 @@ export class SupabaseDataService {
     if (error) {
       console.error('Error marking notification as read:', error)
       throw new Error('Failed to mark notification as read')
+    }
+  }
+
+  /**
+   * Get recent orders only (last 30 days) for dashboard performance
+   */
+  async getRecentOrders(days: number = 30): Promise<Order[]> {
+    const userId = await this.getCurrentUserId()
+    if (!userId) return []
+
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - days)
+
+    const { data, error } = await this.supabase
+      .from('orders')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('created_at', cutoffDate.toISOString())
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching orders:', error)
+      return []
+    }
+
+    return data || []
+  }
+
+  /**
+   * Get dashboard summary data in a single optimized query
+   */
+  async getDashboardSummary(): Promise<{
+    orders: Order[]
+    customers: Customer[]
+    inventory: InventoryItem[]
+    lowStockItems: InventoryItem[]
+    stats: {
+      totalSales: number
+      totalCustomers: number
+      pendingOrders: number
+      lowStockCount: number
+    }
+  }> {
+    const userId = await this.getCurrentUserId()
+    if (!userId) return { orders: [], customers: [], inventory: [], lowStockItems: [], stats: { totalSales: 0, totalCustomers: 0, pendingOrders: 0, lowStockCount: 0 } }
+
+    // Get recent orders (last 30 days)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const { data: orders, error: ordersError } = await this.supabase
+      .from('orders')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('created_at', thirtyDaysAgo.toISOString())
+      .order('created_at', { ascending: false })
+
+    // Get customers
+    const { data: customers, error: customersError } = await this.supabase
+      .from('customers')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    // Get all inventory items (we'll filter for low stock in the dashboard store)
+    const { data: inventory, error: inventoryError } = await this.supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('user_id', userId)
+
+    // Calculate stats
+    const totalSales = orders?.reduce((acc, order) => acc + order.total_amount, 0) || 0
+    const totalCustomers = customers?.length || 0
+    const pendingOrders = orders?.filter(order => 
+      ['pending', 'confirmed', 'preparing'].includes(order.status)
+    ).length || 0
+    const lowStockCount = 0 // Will be calculated in dashboard store
+
+    return {
+      orders: orders || [],
+      customers: customers || [],
+      inventory: inventory || [], // Return actual inventory data
+      lowStockItems: [], // Will be filtered in dashboard store
+      stats: {
+        totalSales,
+        totalCustomers,
+        pendingOrders,
+        lowStockCount
+      }
     }
   }
 }

@@ -30,6 +30,7 @@ import React from "react"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
+import { useDashboardStore } from "@/lib/dashboard-store"
 
 // Local interfaces for dashboard calculations
 interface DashboardStats {
@@ -155,18 +156,15 @@ const InventoryForm = React.memo(({
 export default function DashboardPage() {
   const { toast: shadcnToast } = useToast()
   const { convertPrice } = useCurrency()
-  const { subscriptionStatus } = useAuth() // Add this
+  const { stats, orders, customers, inventory, loading, error, loadDashboardData } = useDashboardStore()
+  const { subscriptionStatus } = useAuth()
 
   const [isClient, setIsClient] = useState(false)
 
-  // ✅ Fix: Use Supabase as single source of truth for all data
-    // ✅ Fix: Use Supabase as single source of truth for all data
-    const [orders, setOrders] = useState<Order[]>([])
-    const [customers, setCustomers] = useState<Customer[]>([])
-    const [menuItems, setMenuItems] = useState<MenuItem[]>([])
-    const [inventory, setInventory] = useState<InventoryItem[]>([])
-    const [isLoading, setIsLoading] = useState(true)
-    const [dataError, setDataError] = useState<string | null>(null)
+  // Load data on mount
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const { notifications, addNotification, markAsRead, clearAll } = useNotifications()
@@ -179,37 +177,6 @@ export default function DashboardPage() {
     unit: "",
     supplier: "",
   })
-
-  // ✅ Fix: Load all data from Supabase consistently
-  useEffect(() => {
-    const loadAllData = async () => {
-      try {
-        setIsLoading(true)
-        setDataError(null)
-
-        // Load all data in parallel for better performance
-        const [ordersData, customersData, menuItemsData, inventoryData] = await Promise.all([
-          supabaseDataService.getOrders(),
-          supabaseDataService.getCustomers(),
-          supabaseDataService.getMenuItems(),
-          supabaseDataService.getInventoryItems()
-        ])
-
-        setOrders(ordersData)
-        setCustomers(customersData)
-        setMenuItems(menuItemsData)
-        setInventory(inventoryData)
-      } catch (error) {
-        console.error("Error loading dashboard data:", error)
-        setDataError("Failed to load dashboard data. Please refresh the page.")
-        toast.error("Failed to load dashboard data")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadAllData()
-  }, [])
 
   // Add notification triggers
   useEffect(() => {
@@ -284,118 +251,40 @@ export default function DashboardPage() {
     }
   }, [subscriptionStatus, addNotification])
 
-    // ✅ Fix: Only render framer-motion components after hydration
-    useEffect(() => {
-      setIsClient(true)
-    }, [])
+  // Only render framer-motion components after hydration
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
-    // ✅ Fix: Map Supabase orders to dashboard format
-    const dashboardOrders = useMemo((): DashboardOrder[] => {
-      return orders.map(order => {
-        const customer = customers.find(c => c.id === order.customer_id)
-        const orderDate = new Date(order.created_at)
-        
-        return {
-          id: order.id,
-          orderNo: order.order_number,
-          customer: customer?.name || "Unknown Customer",
-          items: order.items.map(item => `${item.name} (${item.quantity})`),
-          total: order.total_amount,
-          status: order.status,
-          time: orderDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          date: orderDate.toISOString().split('T')[0]
-        }
-      })
-    }, [orders, customers])
-
-  // ✅ Fix: Calculate stats with proper data validation and error handling
-  const stats = useMemo((): DashboardStats => {
-    try {
-      // Total sales
-      const totalSales = orders.reduce((acc, order) => acc + order.total_amount, 0)
-
-      // Total customers
-      const totalCustomers = customers.length
-
-      // Pending orders (only orders that are not yet completed - pending, confirmed, preparing)
-      const pendingOrders = orders.filter(order => 
-        ['pending', 'confirmed', 'preparing'].includes(order.status)
-      ).length
-
-      // Low stock items
-      const lowStockItems = inventory.filter(item => 
-        item.current_stock < item.min_stock_level
-      ).length
-
-      // Today's orders
-      const today = new Date().toISOString().split('T')[0]
-      const todayOrders = orders.filter(order => {
-        const orderDate = new Date(order.created_at).toISOString().split('T')[0]
-        return orderDate === today
-      }).length
-
-      // Monthly revenue
-      const now = new Date()
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      const monthlyRevenue = orders.filter(order => {
-        const orderDate = new Date(order.created_at)
-        return orderDate >= monthStart
-      }).reduce((acc, order) => acc + order.total_amount, 0)
-
-      // Average order value
-      const averageOrderValue = orders.length > 0 ? totalSales / orders.length : 0
-
-      // Top selling item
-      const itemCounts: Record<string, number> = {}
-      orders.forEach(order => {
-        order.items.forEach(item => {
-          itemCounts[item.name] = (itemCounts[item.name] || 0) + item.quantity
-        })
-      })
-
-      const topItem = Object.entries(itemCounts)
-        .sort(([,a], [,b]) => b - a)[0]?.[0] || "N/A"
-
+  // Map Supabase orders to dashboard format
+  const dashboardOrders = useMemo((): DashboardOrder[] => {
+    return orders.map(order => {
+      const customer = customers.find(c => c.id === order.customer_id)
+      const orderDate = new Date(order.created_at)
+      
       return {
-        totalSales,
-        totalCustomers,
-        pendingOrders,
-        lowStockItems,
-        todayOrders,
-        monthlyRevenue,
-        topSellingItem: topItem,
-        averageOrderValue,
+        id: order.id,
+        orderNo: order.order_number,
+        customer: customer?.name || "Unknown Customer",
+        items: order.items.map((item: any) => `${item.name} (${item.quantity})`),
+        total: order.total_amount,
+        status: order.status,
+        time: orderDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: orderDate.toISOString().split('T')[0]
       }
-    } catch (error) {
-      console.error("Error calculating dashboard stats:", error)
-      return {
-        totalSales: 0,
-        totalCustomers: 0,
-        pendingOrders: 0,
-        lowStockItems: 0,
-        todayOrders: 0,
-        monthlyRevenue: 0,
-        topSellingItem: "N/A",
-        averageOrderValue: 0,
-      }
-    }
-  }, [orders, customers, inventory])
+    })
+  }, [orders, customers])
 
-  // ✅ Fix: Recent orders with proper mapping
-  const recentOrders = useMemo(() => {
-    return dashboardOrders.slice(0, 5)
-  }, [dashboardOrders])
-
-  // ✅ Fix: Low stock items with proper mapping
+  // Use inventory data from store (already filtered for low stock)
   const lowStockItemsList = useMemo(() => {
-    return inventory.filter(item => item.current_stock < item.min_stock_level)
+    return inventory
   }, [inventory])
 
-  // ✅ Fix: Stat cards with proper formatting and validation
+  // Stat cards with proper formatting and validation
   const statCards = [
     {
       title: "Total Sales",
-      value: stats.totalSales > 0 ? convertPrice(stats.totalSales, "INR") : "₹0",
+      value: stats.totalSales > 0 ? convertPrice(stats.totalSales) : "₹0",
       change: "+12.5%",
       changeType: "positive" as const,
       icon: IndianRupee,
@@ -468,7 +357,7 @@ export default function DashboardPage() {
         })
 
         if (created) {
-          setInventory((prev) => [...prev, created])
+          // No need to update inventory directly here, it will be updated by the store
           setIsAddModalOpen(false)
           resetForm()
           toast.success("Inventory item added successfully")
@@ -486,13 +375,13 @@ export default function DashboardPage() {
     resetForm()
   }, [resetForm])
 
-  if (dataError) {
+  if (error) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-red-700 mb-2">Error Loading Dashboard</h3>
-          <p className="text-muted-foreground mb-4">{dataError}</p>
+          <p className="text-muted-foreground mb-4">{error}</p>
           <Button onClick={() => window.location.reload()}>
             Refresh Page
           </Button>
@@ -531,9 +420,9 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-           {/* Stats Cards */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {isLoading ? (
+        {loading ? (
           // Loading skeleton for stats cards
           Array.from({ length: 4 }).map((_, index) => (
             <Card key={index} className="animate-pulse">
@@ -581,8 +470,8 @@ export default function DashboardPage() {
         )}
       </div>
 
-           {/* Main Content Grid */}
-           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Orders */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
@@ -598,7 +487,7 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
+              {loading ? (
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="h-6 w-6 animate-spin" />
                   <span className="ml-2">Loading orders...</span>
@@ -609,7 +498,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {recentOrders.map((order, index) => (
+                  {dashboardOrders.slice(0, 5).map((order, index) => (
                     <motion.div
                       key={order.id}
                       initial={{ opacity: 0, x: -10 }}
@@ -637,7 +526,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-right">
                         <div className="font-medium text-foreground">
-                          {convertPrice(order.total, "INR")}
+                          {convertPrice(order.total)}
                         </div>
                         <div className="text-xs text-muted-foreground">{order.time}</div>
                       </div>
@@ -652,7 +541,7 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
 
-               {/* Quick Stats & Alerts */}
+        {/* Quick Stats & Alerts */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -675,7 +564,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Average Order</span>
                 <span className="font-medium text-foreground">
-                  {stats.averageOrderValue > 0 ? convertPrice(stats.averageOrderValue, "INR") : "₹0"}
+                  {stats.averageOrderValue > 0 ? convertPrice(stats.averageOrderValue) : "₹0"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -685,7 +574,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Monthly Revenue</span>
                 <span className="font-medium text-primary">
-                  {convertPrice(stats.monthlyRevenue, "INR")}
+                  {convertPrice(stats.monthlyRevenue)}
                 </span>
               </div>
             </CardContent>
@@ -700,7 +589,7 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
+              {loading ? (
                 <div className="flex items-center justify-center h-24">
                   <Loader2 className="h-5 w-5 animate-spin" />
                 </div>

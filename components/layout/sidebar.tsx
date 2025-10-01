@@ -19,6 +19,7 @@ import {
   TrendingUp,
   AlertTriangle,
   MessageSquare,
+  Contact,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/lib/shared-state"
@@ -44,6 +45,7 @@ const navigationItems: NavigationItem[] = [
   { name: "Community", href: "/dashboard/community", icon: MessageSquare, description: "Connect with other restaurants" },
   { name: "Profile", href: "/dashboard/profile", icon: User, description: "User profile" },
   { name: "Settings", href: "/dashboard/settings", icon: Settings, description: "App settings" },
+  {name: "Contact Us", href: "/dashboard/contact", icon: Contact, description : "Contact us"},
 ]
 
 // Memoized navigation item component

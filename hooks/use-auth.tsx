@@ -33,11 +33,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Cache for user data to avoid repeated queries
+  const [cachedProfile, setCachedProfile] = useState<any | null>(null)
+  const [cachedSubscription, setCachedSubscription] = useState<any | null>(null)
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
+  const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
   const refreshSubscriptionStatus = async () => {
     if (user?.id) {
       try {
         const status = await subscriptionService.getSubscriptionStatus(user.id)
         setSubscriptionStatus(status)
+        setCachedSubscription(status)
+        setLastFetchTime(Date.now())
       } catch (error) {
         console.error('Error refreshing subscription status:', error)
       }
@@ -69,7 +77,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(data.user ?? null)
         
         if (data.user) {
-          // Load user profile and subscription status
+          // Check cache first
+          const now = Date.now()
+          if (cachedProfile && cachedSubscription && (now - lastFetchTime) < CACHE_DURATION) {
+            setUserProfile(cachedProfile)
+            setSubscriptionStatus(cachedSubscription)
+            setLoading(false)
+            return
+          }
+
+          // Load fresh data if cache expired or missing
           const { data: profile } = await supabase
             .from('user_profiles')
             .select('*')
@@ -77,10 +94,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .single()
           
           setUserProfile(profile || null)
+          setCachedProfile(profile || null)
           
           if (profile) {
             const status = await subscriptionService.getSubscriptionStatus(data.user.id)
             setSubscriptionStatus(status)
+            setCachedSubscription(status)
+            setLastFetchTime(Date.now())
           }
         }
       } catch (error) {
@@ -99,7 +119,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null)
       
       if (session?.user) {
-        // Load user profile and subscription status
+        // Use cached data if available and fresh
+        const now = Date.now()
+        if (cachedProfile && cachedSubscription && (now - lastFetchTime) < CACHE_DURATION) {
+          setUserProfile(cachedProfile)
+          setSubscriptionStatus(cachedSubscription)
+          setLoading(false)
+          return
+        }
+
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('*')
@@ -107,14 +135,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single()
         
         setUserProfile(profile || null)
+        setCachedProfile(profile || null)
         
         if (profile) {
           const status = await subscriptionService.getSubscriptionStatus(session.user.id)
           setSubscriptionStatus(status)
+          setCachedSubscription(status)
+          setLastFetchTime(Date.now())
         }
       } else {
         setUserProfile(null)
         setSubscriptionStatus(null)
+        setCachedProfile(null)
+        setCachedSubscription(null)
       }
       
       setLoading(false)

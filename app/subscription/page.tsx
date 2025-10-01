@@ -37,12 +37,38 @@ export default function SubscriptionPage() {
     setLoading(true)
 
     try {
-      window.location.href = 'https://rzp.io/rzp/Jnv9I3aH'
-      
-      toast.success('Redirecting to payment...')
+      // Create subscription through API
+      const response = await fetch('/api/create-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          planId: 'monthly',
+          userId: user.id
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create subscription')
+      }
+
+      if (data.success && data.subscription) {
+        toast.success('Subscription created! Processing payment...')
+        
+        // For now, redirect to dashboard (in production, this would redirect to payment page)
+        // You can customize this based on your payment flow
+        setTimeout(() => {
+          router.push('/dashboard')
+        }, 2000)
+      }
+
     } catch (error: any) {
       console.error('Subscription error:', error)
-      toast.error('Failed to redirect to payment')
+      toast.error(error.message || 'Failed to create subscription')
+    } finally {
       setLoading(false)
     }
   }
@@ -128,7 +154,7 @@ export default function SubscriptionPage() {
                   {loading ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current mr-3"></div>
-                      Redirecting to Payment...
+                      Creating Subscription...
                     </>
                   ) : (
                     <>

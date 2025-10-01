@@ -5,6 +5,7 @@ export function validateEnvironment() {
     'RAZORPAY_KEY_ID',
     'RAZORPAY_KEY_SECRET',
     'RAZORPAY_WEBHOOK_SECRET'
+    // No email configuration needed anymore!
   ]
 
   const missing = required.filter(key => !process.env[key])

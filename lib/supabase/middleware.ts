@@ -23,7 +23,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
         },
       },
-    },
+    }
   )
 
   const {
@@ -36,6 +36,8 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/signup") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
+    !request.nextUrl.pathname.startsWith("/privacy") &&
+    !request.nextUrl.pathname.startsWith("/terms") &&
     request.nextUrl.pathname !== "/"
   ) {
     const url = request.nextUrl.clone()
@@ -49,8 +51,56 @@ export async function updateSession(request: NextRequest) {
 
     if (isProtectedRoute) {
       try {
-        // Check subscription status
-        const subscriptionStatus = await subscriptionService.getSubscriptionStatus(user.id)
+        // Try to get cached subscription data from cookies first
+        const cachedStatus = request.cookies.get('subscription_status')
+        let subscriptionStatus
+
+        if (cachedStatus && cachedStatus.value) {
+          try {
+            subscriptionStatus = JSON.parse(decodeURIComponent(cachedStatus.value))
+            // Check if cache is still valid (5 minutes)
+            const cacheTime = request.cookies.get('subscription_cache_time')?.value
+            if (cacheTime && (Date.now() - parseInt(cacheTime)) < 5 * 60 * 1000) {
+              // Use cached data - skip database query
+            } else {
+              throw new Error('Cache expired')
+            }
+          } catch {
+            // Cache invalid or expired, fetch fresh data
+            subscriptionStatus = await subscriptionService.getSubscriptionStatus(user.id)
+            
+            // Cache the result
+            supabaseResponse.cookies.set('subscription_status', encodeURIComponent(JSON.stringify(subscriptionStatus)), {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'lax',
+              maxAge: 5 * 60 // 5 minutes
+            })
+            supabaseResponse.cookies.set('subscription_cache_time', Date.now().toString(), {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'lax',
+              maxAge: 5 * 60
+            })
+          }
+        } else {
+          // No cache, fetch fresh data
+          subscriptionStatus = await subscriptionService.getSubscriptionStatus(user.id)
+          
+          // Cache the result
+          supabaseResponse.cookies.set('subscription_status', encodeURIComponent(JSON.stringify(subscriptionStatus)), {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 5 * 60 // 5 minutes
+          })
+          supabaseResponse.cookies.set('subscription_cache_time', Date.now().toString(), {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 5 * 60
+          })
+        }
 
         // If no access and not already going to subscription page, redirect to subscription
         if (!subscriptionStatus.isSubscribed && !subscriptionStatus.isTrialActive && 

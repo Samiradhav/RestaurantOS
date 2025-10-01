@@ -3,7 +3,23 @@
 import { useState, useEffect, useMemo } from "react"
 import { motion } from "framer-motion"
 import { create } from "zustand"
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Eye, Loader2, AlertCircle, TrendingUp, TrendingDown } from "lucide-react"
+import { 
+  Plus, 
+  Search, 
+  MoreHorizontal, 
+  Edit, 
+  Trash2, 
+  Eye, 
+  Loader2, 
+  AlertCircle, 
+  TrendingUp, 
+  TrendingDown,
+  Users,
+  Phone,
+  Mail,
+  MapPin,
+  Info
+} from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -104,6 +120,7 @@ export default function CustomersPage() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [existingCustomerWithPhone, setExistingCustomerWithPhone] = useState<Customer | null>(null)
   const [formData, setFormData] = useState<CustomerFormData>({
     name: "",
     phone: "",
@@ -133,16 +150,17 @@ export default function CustomersPage() {
     loadCustomers()
   }, [setCustomers, setLoading, setError])
 
-  // Filtered customers based on search term
+  // Enhanced search with multiple filters
   const filteredCustomers = useMemo(() => {
     if (!searchTerm.trim()) return customers
 
-    const term = searchTerm.toLowerCase()
+    const term = searchTerm.toLowerCase().trim()
     return customers.filter(customer =>
       customer.name.toLowerCase().includes(term) ||
       customer.email?.toLowerCase().includes(term) ||
       customer.phone?.toLowerCase().includes(term) ||
-      customer.address?.toLowerCase().includes(term)
+      customer.address?.toLowerCase().includes(term) ||
+      customer.notes?.toLowerCase().includes(term)
     )
   }, [customers, searchTerm])
 
@@ -169,9 +187,10 @@ export default function CustomersPage() {
     }
   }, [customers])
 
-  // Form validation
-  const validateForm = () => {
+  // Enhanced form validation with phone uniqueness check
+  const validateForm = (isEdit = false) => {
     const errors: Record<string, string> = {}
+    setExistingCustomerWithPhone(null)
 
     if (!formData.name.trim()) {
       errors.name = "Customer name is required"
@@ -183,6 +202,22 @@ export default function CustomersPage() {
 
     if (formData.phone && !/^\+?[\d\s\-\(\)]{10,}$/.test(formData.phone)) {
       errors.phone = "Please enter a valid phone number"
+    }
+
+    // Check for duplicate phone number (only if phone is provided)
+    if (formData.phone?.trim()) {
+      const existingCustomer = customers.find(customer => {
+        // Skip the current customer when editing
+        if (isEdit && selectedCustomer && customer.id === selectedCustomer.id) {
+          return false
+        }
+        return customer.phone?.trim() === formData.phone?.trim()
+      })
+
+      if (existingCustomer) {
+        setExistingCustomerWithPhone(existingCustomer)
+        errors.phone = "duplicate_phone"
+      }
     }
 
     setFormErrors(errors)
@@ -200,14 +235,16 @@ export default function CustomersPage() {
     })
     setFormErrors({})
     setSelectedCustomer(null)
+    setExistingCustomerWithPhone(null)
   }
 
-  // Handle create customer
+  // Handle create customer with enhanced validation
   const handleCreateCustomer = async () => {
     if (!validateForm()) return
 
     try {
       setIsSubmitting(true)
+
       const customerData = {
         name: formData.name.trim(),
         phone: formData.phone?.trim(),
@@ -235,9 +272,9 @@ export default function CustomersPage() {
     }
   }
 
-  // Handle update customer
+  // Handle update customer with enhanced validation
   const handleUpdateCustomer = async () => {
-    if (!selectedCustomer || !validateForm()) return
+    if (!selectedCustomer || !validateForm(true)) return
 
     try {
       setIsSubmitting(true)
@@ -300,6 +337,7 @@ export default function CustomersPage() {
       notes: customer.notes || "",
     })
     setFormErrors({})
+    setExistingCustomerWithPhone(null)
     setIsEditModalOpen(true)
   }
 
@@ -349,7 +387,12 @@ export default function CustomersPage() {
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between space-y-2"
       >
-        <h2 className="text-3xl font-bold tracking-tight">Customers</h2>
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Customers</h2>
+          <p className="text-muted-foreground">
+            Manage your restaurant customers and their loyalty information.
+          </p>
+        </div>
         <div className="flex items-center space-x-2">
           <Button
             onClick={() => setIsCreateModalOpen(true)}
@@ -484,16 +527,32 @@ export default function CustomersPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            {/* Enhanced Search Bar */}
+            <div className="flex items-center space-x-2 mb-6">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search customers..."
+                  placeholder="Search by name, email, phone, or address..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
+                  className="pl-10 h-11"
                 />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
+                    onClick={() => setSearchTerm("")}
+                  >
+                    ×
+                  </Button>
+                )}
               </div>
+              {searchTerm && (
+                <div className="text-sm text-muted-foreground">
+                  {filteredCustomers.length} of {customers.length} customers
+                </div>
+              )}
             </div>
 
             {isLoading ? (
@@ -520,7 +579,15 @@ export default function CustomersPage() {
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8">
                         <div className="text-muted-foreground">
-                          {searchTerm ? "No customers found matching your search." : "No customers yet. Add your first customer!"}
+                          {searchTerm ? (
+                            <div>
+                              <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                              <p>No customers found matching "{searchTerm}"</p>
+                              <p className="text-sm mt-1">Try a different search term</p>
+                            </div>
+                          ) : (
+                            "No customers yet. Add your first customer!"
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -541,10 +608,16 @@ export default function CustomersPage() {
                         <TableCell>
                           <div className="space-y-1">
                             {customer.email && (
-                              <p className="text-sm">{customer.email}</p>
+                              <div className="flex items-center gap-1">
+                                <Mail className="h-3 w-3 text-muted-foreground" />
+                                <p className="text-sm">{customer.email}</p>
+                              </div>
                             )}
                             {customer.phone && (
-                              <p className="text-sm text-muted-foreground">{customer.phone}</p>
+                              <div className="flex items-center gap-1">
+                                <Phone className="h-3 w-3 text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">{customer.phone}</p>
+                              </div>
                             )}
                           </div>
                         </TableCell>
@@ -633,12 +706,46 @@ export default function CustomersPage() {
               <Input
                 id="phone"
                 value={formData.phone}
-                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                className={formErrors.phone ? "border-red-500" : ""}
-                placeholder="+1 (555) 123-4567"
+                onChange={(e) => {
+                  setFormData(prev => ({ ...prev, phone: e.target.value }))
+                  // Clear existing customer when phone changes
+                  if (existingCustomerWithPhone) {
+                    setExistingCustomerWithPhone(null)
+                  }
+                }}
+                className={formErrors.phone === "duplicate_phone" ? "border-orange-500" : formErrors.phone ? "border-red-500" : ""}
+                placeholder="+91 98765 43210"
               />
-              {formErrors.phone && (
+              {formErrors.phone === "duplicate_phone" && existingCustomerWithPhone ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 p-2 bg-orange-50 border border-orange-200 rounded-md">
+                    <Info className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                    <span className="text-sm text-orange-700">
+                      This phone number is already registered
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setIsCreateModalOpen(false)
+                      openViewModal(existingCustomerWithPhone)
+                    }}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Existing Customer Details
+                  </Button>
+                </div>
+              ) : formErrors.phone ? (
                 <p className="text-sm text-red-500">{formErrors.phone}</p>
+              ) : (
+                formData.phone && !formErrors.phone && (
+                  <p className="text-xs text-muted-foreground">
+                    📱 Phone number will be validated for uniqueness
+                  </p>
+                )
               )}
             </div>
             <div className="grid gap-2">
@@ -673,7 +780,10 @@ export default function CustomersPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleCreateCustomer} disabled={isSubmitting}>
+            <Button 
+              onClick={handleCreateCustomer} 
+              disabled={isSubmitting || formErrors.phone === "duplicate_phone"}
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -729,12 +839,45 @@ export default function CustomersPage() {
               <Input
                 id="edit-phone"
                 value={formData.phone}
-                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                className={formErrors.phone ? "border-red-500" : ""}
-                placeholder="+1 (555) 123-4567"
+                onChange={(e) => {
+                  setFormData(prev => ({ ...prev, phone: e.target.value }))
+                  if (existingCustomerWithPhone) {
+                    setExistingCustomerWithPhone(null)
+                  }
+                }}
+                className={formErrors.phone === "duplicate_phone" ? "border-orange-500" : formErrors.phone ? "border-red-500" : ""}
+                placeholder="+91 98765 43210"
               />
-              {formErrors.phone && (
+              {formErrors.phone === "duplicate_phone" && existingCustomerWithPhone ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 p-2 bg-orange-50 border border-orange-200 rounded-md">
+                    <Info className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                    <span className="text-sm text-orange-700">
+                      This phone number is already registered
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setIsEditModalOpen(false)
+                      openViewModal(existingCustomerWithPhone)
+                    }}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Existing Customer Details
+                  </Button>
+                </div>
+              ) : formErrors.phone ? (
                 <p className="text-sm text-red-500">{formErrors.phone}</p>
+              ) : (
+                formData.phone && !formErrors.phone && (
+                  <p className="text-xs text-muted-foreground">
+                    📱 Phone number will be validated for uniqueness
+                  </p>
+                )
               )}
             </div>
             <div className="grid gap-2">
@@ -769,7 +912,10 @@ export default function CustomersPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleUpdateCustomer} disabled={isSubmitting}>
+            <Button 
+              onClick={handleUpdateCustomer} 
+              disabled={isSubmitting || formErrors.phone === "duplicate_phone"}
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />

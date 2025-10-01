@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { motion } from "framer-motion"
-import { Plus, Clock, CheckCircle, XCircle, AlertCircle, Eye, Trash2, Loader2 } from "lucide-react"
+import { Plus, Clock, CheckCircle, XCircle, AlertCircle, Eye, Trash2, Loader2, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable } from "@/components/ui/data-table"
@@ -14,6 +15,7 @@ import { toast } from "sonner"
 import { supabaseDataService, type Order as SupabaseOrder, type MenuItem, type Customer } from "@/lib/supabase-data-service"
 import { useCustomerStore } from "@/lib/shared-state"
 import { useCurrency } from "@/lib/currency-store"
+
 // Local interfaces for UI state management
 interface LocalOrder {
   id: string // Changed to string to match Supabase
@@ -36,7 +38,8 @@ interface LocalOrderItem {
   quantity: number
 }
 
-// Mapping functions between local and Supabase interfaces
+// Mapping functions between local and Supabase interfaces - moved outside component to avoid recreation
+
 const mapSupabaseOrderToLocal = (supabaseOrder: SupabaseOrder, customers: Customer[]): LocalOrder => {
   const customer = customers.find(c => c.id === supabaseOrder.customer_id)
   return {
@@ -47,6 +50,8 @@ const mapSupabaseOrderToLocal = (supabaseOrder: SupabaseOrder, customers: Custom
     items: supabaseOrder.items.map((item) => `${item.name} (${item.quantity})`),
     total: supabaseOrder.total_amount,
     status: mapSupabaseStatusToLocal(supabaseOrder.status),
+    paymentMethod: supabaseOrder.payment_method as "cash" | "online" | "card" | undefined,
+    payment_status: supabaseOrder.payment_status,
     date: new Date(supabaseOrder.created_at).toISOString().split('T')[0],
     time: new Date(supabaseOrder.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
@@ -85,14 +90,27 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [orderItems, setOrderItems] = useState<LocalOrderItem[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState("")
+  const [selectedCustomerName, setSelectedCustomerName] = useState("")
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("")
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false)
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
   const [isLoadingMenuItems, setIsLoadingMenuItems] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"cash" | "card" | "online">("cash")
 
+  // Add new customer form state
+  const [isAddingNewCustomer, setIsAddingNewCustomer] = useState(false)
+  const [newCustomerData, setNewCustomerData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: ""
+  })
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
+
   // Use currency hook
   const { formatPrice } = useCurrency()
 
-  // Load data on component mount
+  // Load data on component mount - optimized with error boundaries
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -108,7 +126,7 @@ export default function OrdersPage() {
         setCustomers(customersData)
         setMenuItems(menuItemsData)
         
-        // Map orders to local format
+        // Map orders to local format - moved outside setState for better performance
         const mappedOrders = supabaseOrders.map(order => mapSupabaseOrderToLocal(order, customersData))
         setOrderList(mappedOrders)
       } catch (error) {
@@ -122,39 +140,119 @@ export default function OrdersPage() {
     loadData()
   }, [])
 
-  const filteredOrders = statusFilter === "all" ? orderList : orderList.filter((order) => order.status === statusFilter)
+  // Enhanced customer search with multiple filters - memoized
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearchTerm.trim()) return customers
 
-  const getStatusIcon = (status: string) => {
+    const term = customerSearchTerm.toLowerCase().trim()
+    return customers.filter(customer =>
+      customer.name.toLowerCase().includes(term) ||
+      customer.email?.toLowerCase().includes(term) ||
+      customer.phone?.toLowerCase().includes(term) ||
+      customer.address?.toLowerCase().includes(term)
+    )
+  }, [customers, customerSearchTerm])
+
+  // Memoized filtered orders - major performance improvement
+  const filteredOrders = useMemo(() => {
+    return statusFilter === "all" ? orderList : orderList.filter((order) => order.status === statusFilter)
+  }, [orderList, statusFilter])
+
+  // Memoized status counts - prevents recalculation on every render
+  const statusCounts = useMemo(() => ({
+    all: orderList.length,
+    pending: orderList.filter((o) => o.status === "pending").length,
+    preparing: orderList.filter((o) => o.status === "preparing").length,
+    completed: orderList.filter((o) => o.status === "completed").length,
+    cancelled: orderList.filter((o) => o.status === "cancelled").length,
+  }), [orderList])
+
+  // Memoized icon/color getters
+  const getStatusIcon = useCallback((status: string) => {
     switch (status) {
-      case "pending":
-        return <Clock className="h-4 w-4" />
-      case "preparing":
-        return <AlertCircle className="h-4 w-4" />
-      case "completed":
-        return <CheckCircle className="h-4 w-4" />
-      case "cancelled":
-        return <XCircle className="h-4 w-4" />
-      default:
-        return <Clock className="h-4 w-4" />
+      case "pending": return <Clock className="h-4 w-4" />
+      case "preparing": return <AlertCircle className="h-4 w-4" />
+      case "completed": return <CheckCircle className="h-4 w-4" />
+      case "cancelled": return <XCircle className="h-4 w-4" />
+      default: return <Clock className="h-4 w-4" />
     }
-  }
+  }, [])
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
-      case "pending":
-        return "bg-blue-500/20 text-blue-500"
-      case "preparing":
-        return "bg-orange-500/20 text-orange-500"
-      case "completed":
-        return "bg-green-500/20 text-green-500"
-      case "cancelled":
-        return "bg-red-500/20 text-red-500"
-      default:
-        return "bg-gray-500/20 text-gray-500"
+      case "pending": return "bg-blue-500/20 text-blue-500"
+      case "preparing": return "bg-orange-500/20 text-orange-500"
+      case "completed": return "bg-green-500/20 text-green-500"
+      case "cancelled": return "bg-red-500/20 text-red-500"
+      default: return "bg-gray-500/20 text-gray-500"
     }
-  }
+  }, [])
 
-  const updateOrderStatus = async (orderId: string, newStatus: LocalOrder["status"]) => {
+  // Memoized event handlers
+  const handleCustomerSelect = useCallback((customer: Customer) => {
+    setSelectedCustomer(customer.id)
+    setSelectedCustomerName(customer.name)
+    setCustomerSearchTerm(customer.name)
+    setIsCustomerDropdownOpen(false)
+  }, [])
+
+  const handleCustomerSearchChange = useCallback((value: string) => {
+    setCustomerSearchTerm(value)
+    setSelectedCustomer("")
+    setSelectedCustomerName("")
+    setIsCustomerDropdownOpen(true)
+    setIsAddingNewCustomer(false)
+  }, [])
+
+  const clearCustomerSelection = useCallback(() => {
+    setSelectedCustomer("")
+    setSelectedCustomerName("")
+    setCustomerSearchTerm("")
+    setIsCustomerDropdownOpen(false)
+    setIsAddingNewCustomer(false)
+    setNewCustomerData({ name: "", email: "", phone: "", address: "" })
+  }, [])
+
+  const handleCreateNewCustomer = useCallback(async () => {
+    if (!newCustomerData.name.trim()) {
+      toast.error("Customer name is required")
+      return
+    }
+
+    try {
+      setIsCreatingCustomer(true)
+      
+      const customerData = {
+        name: newCustomerData.name.trim(),
+        email: newCustomerData.email?.trim() || undefined,
+        phone: newCustomerData.phone?.trim() || undefined,
+        address: newCustomerData.address?.trim() || undefined,
+        loyalty_points: 0,
+        total_orders: 0,
+        last_order_date: undefined,
+        notes: undefined
+      }
+
+      const createdCustomer = await supabaseDataService.createCustomer(customerData)
+      
+      if (createdCustomer) {
+        setCustomers(prev => [...prev, createdCustomer])
+        handleCustomerSelect(createdCustomer)
+        setIsAddingNewCustomer(false)
+        setNewCustomerData({ name: "", email: "", phone: "", address: "" })
+        toast.success("Customer created successfully!")
+      } else {
+        toast.error("Failed to create customer")
+      }
+    } catch (error) {
+      console.error("Error creating customer:", error)
+      toast.error("Failed to create customer")
+    } finally {
+      setIsCreatingCustomer(false)
+    }
+  }, [newCustomerData, handleCustomerSelect])
+
+  const updateOrderStatus = useCallback(async (orderId: string, newStatus: LocalOrder["status"]) => {
     try {
       const supabaseStatus = mapLocalStatusToSupabase(newStatus)
       const success = await supabaseDataService.updateOrder(orderId, { status: supabaseStatus })
@@ -171,9 +269,9 @@ export default function OrdersPage() {
       console.error("Error updating order status:", error)
       toast.error("Failed to update order status")
     }
-  }
+  }, [])
 
-  const deleteOrder = async (orderId: string) => {
+  const deleteOrder = useCallback(async (orderId: string) => {
     try {
       const success = await supabaseDataService.deleteOrder(orderId)
       if (success) {
@@ -186,49 +284,49 @@ export default function OrdersPage() {
       console.error("Error deleting order:", error)
       toast.error("Failed to delete order")
     }
-  }
+  }, [])
 
-  const addItemToOrder = (menuItem: MenuItem) => {
+  const addItemToOrder = useCallback((menuItem: MenuItem) => {
     if (!menuItem.is_available) {
       toast.error(`${menuItem.name} is not available`)
       return
     }
 
-    const existingItem = orderItems.find((item) => item.menuItemId === menuItem.id)
-    if (existingItem) {
-      setOrderItems((prev) =>
-        prev.map((item) => (item.menuItemId === menuItem.id ? { ...item, quantity: item.quantity + 1 } : item))
-      )
-    } else {
-      setOrderItems((prev) => [
-        ...prev,
-        {
-          menuItemId: menuItem.id,
-          name: menuItem.name,
-          price: menuItem.price,
-          quantity: 1,
-        },
-      ])
-    }
-  }
+    setOrderItems((prev) => {
+      const existingItem = prev.find((item) => item.menuItemId === menuItem.id)
+      if (existingItem) {
+        return prev.map((item) => (item.menuItemId === menuItem.id ? { ...item, quantity: item.quantity + 1 } : item))
+      } else {
+        return [
+          ...prev,
+          {
+            menuItemId: menuItem.id,
+            name: menuItem.name,
+            price: menuItem.price,
+            quantity: 1,
+          },
+        ]
+      }
+    })
+  }, [])
 
-  const removeItemFromOrder = (menuItemId: string) => {
+  const removeItemFromOrder = useCallback((menuItemId: string) => {
     setOrderItems((prev) => prev.filter((item) => item.menuItemId !== menuItemId))
-  }
+  }, [])
 
-  const updateItemQuantity = (menuItemId: string, quantity: number) => {
+  const updateItemQuantity = useCallback((menuItemId: string, quantity: number) => {
     if (quantity <= 0) {
       removeItemFromOrder(menuItemId)
       return
     }
     setOrderItems((prev) => prev.map((item) => (item.menuItemId === menuItemId ? { ...item, quantity } : item)))
-  }
+  }, [removeItemFromOrder])
 
-  const calculateTotal = () => {
+  const calculateTotal = useCallback(() => {
     return orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  }
+  }, [orderItems])
 
-  const handleCreateOrder = async () => {
+  const handleCreateOrder = useCallback(async () => {
     if (!selectedCustomer || orderItems.length === 0) {
       toast.error("Please select a customer and add items to the order")
       return
@@ -237,14 +335,12 @@ export default function OrdersPage() {
     try {
       setIsCreatingOrder(true)
       
-      // Find customer
       const selectedCustomerData = customers.find(c => c.id === selectedCustomer)
       if (!selectedCustomerData) {
         toast.error("Selected customer not found")
         return
       }
 
-      // Create order data for Supabase
       const orderData = {
         order_number: `ORD-${Date.now()}`,
         customer_id: selectedCustomerData.id,
@@ -268,7 +364,6 @@ export default function OrdersPage() {
       const createdOrder = await supabaseDataService.createOrder(orderData)
       
       if (createdOrder) {
-        // Add to local state
         const newLocalOrder: LocalOrder = {
           id: createdOrder.id,
           orderNo: createdOrder.order_number,
@@ -284,6 +379,8 @@ export default function OrdersPage() {
         setOrderList([newLocalOrder, ...orderList])
         setIsNewOrderModalOpen(false)
         setSelectedCustomer("")
+        setSelectedCustomerName("")
+        setCustomerSearchTerm("")
         setOrderItems([])
         toast.success("Order created successfully!")
       } else {
@@ -295,28 +392,30 @@ export default function OrdersPage() {
     } finally {
       setIsCreatingOrder(false)
     }
-  }
+  }, [selectedCustomer, orderItems, customers, calculateTotal, orderList])
 
-  const openViewModal = (order: LocalOrder) => {
+  const openViewModal = useCallback((order: LocalOrder) => {
     setViewingOrder(order)
     setIsViewModalOpen(true)
-  }
+  }, [])
 
-  const handleCancelNewOrder = () => {
+  const handleCancelNewOrder = useCallback(() => {
     setIsNewOrderModalOpen(false)
     setSelectedCustomer("")
+    setSelectedCustomerName("")
+    setCustomerSearchTerm("")
     setOrderItems([])
-  }
+    setIsAddingNewCustomer(false)
+    setNewCustomerData({ name: "", email: "", phone: "", address: "" })
+  }, [])
 
-  // Handle update payment status
-  const updatePaymentStatus = async (orderId: string, paymentStatus: "pending" | "paid" | "refunded") => {
+  const updatePaymentStatus = useCallback(async (orderId: string, paymentStatus: "pending" | "paid" | "refunded") => {
     try {
       const success = await supabaseDataService.updateOrder(orderId, { 
         payment_status: paymentStatus 
       })
       
       if (success) {
-        // Update local state
         setOrderList(prevOrders => 
           prevOrders.map(order => 
             order.id === orderId 
@@ -325,7 +424,6 @@ export default function OrdersPage() {
           )
         )
         
-        // Update viewing order if it's the current one
         if (viewingOrder && viewingOrder.id === orderId) {
           setViewingOrder(prev => prev ? { ...prev, payment_status: paymentStatus } : null)
         }
@@ -338,17 +436,15 @@ export default function OrdersPage() {
       console.error("Error updating payment status:", error)
       toast.error("Failed to update payment status")
     }
-  }
+  }, [viewingOrder])
 
-  // Handle update payment method
-  const updatePaymentMethod = async (orderId: string, paymentMethod: "cash" | "online" | "card") => {
+  const updatePaymentMethod = useCallback(async (orderId: string, paymentMethod: "cash" | "online" | "card") => {
     try {
       const success = await supabaseDataService.updateOrder(orderId, { 
         payment_method: paymentMethod 
       })
       
       if (success) {
-        // Update local state
         setOrderList(prevOrders => 
           prevOrders.map(order => 
             order.id === orderId 
@@ -357,7 +453,6 @@ export default function OrdersPage() {
           )
         )
         
-        // Update viewing order if it's the current one
         if (viewingOrder && viewingOrder.id === orderId) {
           setViewingOrder(prev => prev ? { ...prev, paymentMethod: paymentMethod } : null)
         }
@@ -370,9 +465,10 @@ export default function OrdersPage() {
       console.error("Error updating payment method:", error)
       toast.error("Failed to update payment method")
     }
-  }
+  }, [viewingOrder])
 
-  const columns = [
+  // Memoized columns array - prevents recreation on every render
+  const columns = useMemo(() => [
     {
       key: "orderNo" as keyof LocalOrder,
       label: "Order",
@@ -468,365 +564,567 @@ export default function OrdersPage() {
         </div>
       ),
     },
-  ]
-
-  const statusCounts = {
-    all: orderList.length,
-    pending: orderList.filter((o) => o.status === "pending").length,
-    preparing: orderList.filter((o) => o.status === "preparing").length,
-    completed: orderList.filter((o) => o.status === "completed").length,
-    cancelled: orderList.filter((o) => o.status === "cancelled").length,
-  }
+  ], [formatPrice, getStatusColor, getStatusIcon, openViewModal, updateOrderStatus, deleteOrder])
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Orders Management</h1>
-          <p className="text-muted-foreground">Track and manage all restaurant orders</p>
-        </div>
-        <Button onClick={() => setIsNewOrderModalOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Order
-        </Button>
-      </motion.div>
-
-      {/* Status Filter Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {Object.entries(statusCounts).map(([status, count], index) => (
-          <motion.div
-            key={status}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Card
-              className={`cursor-pointer transition-all hover:shadow-lg ${
-                statusFilter === status ? "ring-2 ring-primary" : ""
-              }`}
-              onClick={() => setStatusFilter(status)}
-            >
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-foreground">{count}</div>
-                <div className="text-sm text-muted-foreground capitalize">
-                  {status === "all" ? "Total Orders" : status}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Orders Table */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-        {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Loading orders...</span>
-          </div>
-        ) : (
-          <DataTable
-            data={filteredOrders}
-            columns={columns}
-            searchKey="orderNo"
-            title={`${statusFilter === "all" ? "All" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} Orders`}
-            onAdd={() => setIsNewOrderModalOpen(true)}
-            addButtonText="New Order"
-          />
-        )}
-      </motion.div>
-
-      {/* New Order Modal */}
-      <Modal
-        isOpen={isNewOrderModalOpen}
-        onClose={handleCancelNewOrder}
-        title="Create New Order"
-        size="xl"
-      >
-        <div className="space-y-6">
-          {/* Customer Selection */}
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-6 border-b"
+        >
           <div className="space-y-2">
-            <Label>Select Customer *</Label>
-            <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a customer" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name} - {customer.phone || customer.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <h1 className="text-4xl font-bold text-foreground tracking-tight">Orders Management</h1>
+            <p className="text-muted-foreground text-lg">Track and manage all restaurant orders efficiently</p>
           </div>
+          <Button 
+            onClick={() => setIsNewOrderModalOpen(true)} 
+            className="gap-2 px-6 py-3 text-base font-medium shadow-md hover:shadow-lg transition-all duration-200"
+          >
+            <Plus className="h-5 w-5" />
+            New Order
+          </Button>
+        </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Menu Items */}
+        {/* Status Filter Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+          {Object.entries(statusCounts).map(([status, count], index) => (
+            <motion.div
+              key={status}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="w-full"
+            >
+              <Card
+                className={`cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 border-2 ${
+                  statusFilter === status 
+                    ? "ring-2 ring-primary border-primary shadow-lg" 
+                    : "hover:border-primary/50"
+                }`}
+                onClick={() => setStatusFilter(status)}
+              >
+                <CardContent className="p-6 text-center">
+                  <div className="text-3xl font-bold text-foreground mb-2">{count}</div>
+                  <div className="text-sm font-medium text-muted-foreground capitalize">
+                    {status === "all" ? "Total Orders" : status}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Orders Table */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ delay: 0.5 }}
+          className="bg-card rounded-lg border shadow-sm"
+        >
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <span className="ml-3 text-lg text-muted-foreground">Loading orders...</span>
+            </div>
+          ) : (
+            <div className="p-6">
+              <DataTable
+                data={filteredOrders}
+                columns={columns}
+                searchKey="orderNo"
+                title={`${statusFilter === "all" ? "All" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} Orders`}
+                onAdd={() => setIsNewOrderModalOpen(true)}
+                addButtonText="New Order"
+              />
+            </div>
+          )}
+        </motion.div>
+
+        {/* New Order Modal */}
+        <Modal
+          isOpen={isNewOrderModalOpen}
+          onClose={handleCancelNewOrder}
+          title="Create New Order"
+          size="xl"
+        >
+          <div className="space-y-8 max-h-[90vh] overflow-y-auto">
+            {/* Customer Selection with Search */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Menu Items</h3>
-              {isLoadingMenuItems ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                  <span className="ml-2">Loading menu items...</span>
+              <Label className="text-lg font-semibold text-foreground">Select Customer *</Label>
+              <div className="relative">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name, email, phone, or address..."
+                    value={customerSearchTerm}
+                    onChange={(e) => handleCustomerSearchChange(e.target.value)}
+                    onFocus={() => setIsCustomerDropdownOpen(true)}
+                    className="pl-12 pr-12 h-12 text-base border-2 focus:border-primary"
+                  />
+                  {customerSearchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={clearCustomerSelection}
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  )}
                 </div>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {menuItems.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No menu items available
-                    </div>
-                  ) : (
-                    menuItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
-                        <div className="flex-1">
-                          <div className="font-medium text-foreground">{item.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {formatPrice(item.price)} • {item.category}
-                            {!item.is_available && (
-                              <span className="ml-2 text-red-500">(Unavailable)</span>
+                
+                {/* Customer Search Results Dropdown */}
+                {isCustomerDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-2 bg-background border-2 border-border rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                    {filteredCustomers.length === 0 ? (
+                      <div className="p-4">
+                        {customerSearchTerm ? (
+                          <div className="space-y-4">
+                            <div>
+                              <Search className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                              <p className="text-lg font-medium text-center">No customers found</p>
+                              <p className="text-sm text-center text-muted-foreground mb-4">"{customerSearchTerm}"</p>
+                            </div>
+                            
+                            {!isAddingNewCustomer ? (
+                              <div className="space-y-3">
+                                <Button
+                                  onClick={() => setIsAddingNewCustomer(true)}
+                                  className="w-full gap-2 h-10 font-medium"
+                                  variant="default"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  Add New Customer
+                                </Button>
+                                <p className="text-xs text-center text-muted-foreground">
+                                  Create a new customer profile for "{customerSearchTerm}"
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-4 border-t pt-4">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-semibold text-foreground">Add New Customer</h4>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setIsAddingNewCustomer(false)}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                  <div>
+                                    <Label className="text-sm font-medium">Name *</Label>
+                                    <Input
+                                      placeholder="Customer name"
+                                      value={newCustomerData.name}
+                                      onChange={(e) => setNewCustomerData(prev => ({ ...prev, name: e.target.value }))}
+                                      className="mt-1"
+                                      disabled={isCreatingCustomer}
+                                    />
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <Label className="text-sm font-medium">Phone</Label>
+                                      <Input
+                                        placeholder="Phone number"
+                                        value={newCustomerData.phone}
+                                        onChange={(e) => setNewCustomerData(prev => ({ ...prev, phone: e.target.value }))}
+                                        className="mt-1"
+                                        disabled={isCreatingCustomer}
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-sm font-medium">Email</Label>
+                                      <Input
+                                        placeholder="Email address"
+                                        type="email"
+                                        value={newCustomerData.email}
+                                        onChange={(e) => setNewCustomerData(prev => ({ ...prev, email: e.target.value }))}
+                                        className="mt-1"
+                                        disabled={isCreatingCustomer}
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  <div>
+                                    <Label className="text-sm font-medium">Address</Label>
+                                    <Input
+                                      placeholder="Customer address"
+                                      value={newCustomerData.address}
+                                      onChange={(e) => setNewCustomerData(prev => ({ ...prev, address: e.target.value }))}
+                                      className="mt-1"
+                                      disabled={isCreatingCustomer}
+                                    />
+                                  </div>
+                                  
+                                  <div className="flex gap-3 pt-2">
+                                    <Button
+                                      onClick={handleCreateNewCustomer}
+                                      disabled={isCreatingCustomer || !newCustomerData.name.trim()}
+                                      className="flex-1"
+                                    >
+                                      {isCreatingCustomer ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                          Creating...
+                                        </>
+                                      ) : (
+                                        "Create & Select Customer"
+                                      )}
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => setIsAddingNewCustomer(false)}
+                                      disabled={isCreatingCustomer}
+                                      className="flex-1"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
                             )}
                           </div>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          onClick={() => addItemToOrder(item)}
-                          disabled={!item.is_available}
-                        >
-                          Add
-                        </Button>
+                        ) : (
+                          <div className="text-center py-8">
+                            <p className="text-lg font-medium">No customers available</p>
+                            <p className="text-sm text-muted-foreground mt-1">Start by adding your first customer</p>
+                          </div>
+                        )}
                       </div>
-                    ))
-                  )}
+                    ) : (
+                      <div className="p-1">
+                        {filteredCustomers.map((customer) => (
+                          <button
+                            key={customer.id}
+                            className="w-full text-left px-4 py-3 hover:bg-muted rounded-md transition-colors focus:bg-muted focus:outline-none"
+                            onClick={() => handleCustomerSelect(customer)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-semibold text-foreground text-base">{customer.name}</div>
+                                <div className="text-sm text-muted-foreground mt-1 flex flex-wrap gap-2">
+                                  {customer.phone && <span>📱 {customer.phone}</span>}
+                                  {customer.email && <span>✉️ {customer.email}</span>}
+                                </div>
+                              </div>
+                              {customer.loyalty_points > 0 && (
+                                <div className="text-sm bg-primary/15 text-primary px-3 py-1 rounded-full font-medium">
+                                  {customer.loyalty_points} pts
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Selected Customer Display */}
+              {selectedCustomer && selectedCustomerName && (
+                <div className="flex items-center justify-between p-4 bg-primary/10 border-2 border-primary/20 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-primary rounded-full"></div>
+                    <span className="font-semibold text-foreground text-lg">{selectedCustomerName}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearCustomerSelection}
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
                 </div>
               )}
             </div>
 
-            {/* Order Items */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Order Items</h3>
-              {orderItems.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No items added yet</div>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {orderItems.map((item) => (
-                    <div key={item.menuItemId} className="flex items-center gap-3 p-3 bg-card border rounded-lg">
-                      <div className="flex-1">
-                      <div className="font-medium text-foreground">{item.name}</div>
-                      <div className="text-sm text-muted-foreground">{formatPrice(item.price)} each</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Menu Items */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-bold text-foreground border-b pb-3">Menu Items</h3>
+                {isLoadingMenuItems ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="ml-3 text-lg">Loading menu items...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    {menuItems.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <div className="text-lg font-medium">No menu items available</div>
+                        <div className="text-sm mt-2">Add items to your menu first</div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updateItemQuantity(item.menuItemId, item.quantity - 1)}
+                    ) : (
+                      menuItems.map((item) => (
+                        <div 
+                          key={item.id} 
+                          className="flex items-center justify-between p-4 bg-muted/50 rounded-xl hover:bg-muted border hover:border-primary/50 transition-all duration-200"
                         >
-                          -
-                        </Button>
-                        <span className="w-8 text-center">{item.quantity}</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updateItemQuantity(item.menuItemId, item.quantity + 1)}
-                        >
-                          +
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeItemFromOrder(item.menuItemId)}
-                          className="text-red-500 hover:text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-foreground text-base mb-1">{item.name}</div>
+                            <div className="text-sm text-muted-foreground flex items-center gap-2">
+                              <span className="font-medium">{formatPrice(item.price)}</span>
+                              <span>•</span>
+                              <span>{item.category}</span>
+                              {!item.is_available && (
+                                <span className="ml-2 text-red-500 font-medium">(Unavailable)</span>
+                              )}
+                            </div>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            onClick={() => addItemToOrder(item)}
+                            disabled={!item.is_available}
+                            className="ml-4 px-6 py-2 font-medium shadow-sm hover:shadow-md transition-all duration-200"
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Order Items */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-bold text-foreground border-b pb-3">Order Items</h3>
+                {orderItems.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <div className="text-lg font-medium">No items added yet</div>
+                    <div className="text-sm mt-2">Select items from the menu to add to this order</div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    {orderItems.map((item) => (
+                      <div 
+                        key={item.menuItemId} 
+                        className="flex items-center gap-4 p-4 bg-card border-2 rounded-xl hover:border-primary/50 transition-all duration-200"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-foreground text-base">{item.name}</div>
+                          <div className="text-sm text-muted-foreground">{formatPrice(item.price)} each</div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateItemQuantity(item.menuItemId, item.quantity - 1)}
+                            className="h-9 w-9 p-0 border-2 hover:border-destructive hover:text-destructive"
+                          >
+                            -
+                          </Button>
+                          <span className="w-10 text-center font-semibold text-lg">{item.quantity}</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateItemQuantity(item.menuItemId, item.quantity + 1)}
+                            className="h-9 w-9 p-0 border-2 hover:border-primary hover:text-primary"
+                          >
+                            +
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeItemFromOrder(item.menuItemId)}
+                            className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </Button>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Order Total */}
+                {orderItems.length > 0 && (
+                  <div className="border-t-2 pt-6 mt-6">
+                    <div className="flex justify-between items-center text-xl font-bold">
+                      <span className="text-foreground">Total:</span>
+                      <span className="text-primary">{formatPrice(calculateTotal())}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Payment Method Selection */}
+            <div className="space-y-4 pt-4 border-t">
+              <Label className="text-lg font-semibold text-foreground">Payment Method *</Label>
+              <Select value={selectedPaymentMethod} onValueChange={(value: "cash" | "card" | "online") => setSelectedPaymentMethod(value)}>
+                <SelectTrigger className="h-12 text-base border-2">
+                  <SelectValue placeholder="Select payment method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash" className="text-base py-3">💵 Cash</SelectItem>
+                  <SelectItem value="card" className="text-base py-3">💳 Card</SelectItem>
+                  <SelectItem value="online" className="text-base py-3">📱 Online/UPI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t">
+              <Button
+                onClick={handleCreateOrder}
+                disabled={!selectedCustomer || orderItems.length === 0 || isCreatingOrder}
+                className="flex-1 h-12 text-base font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                {isCreatingOrder ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    Creating Order...
+                  </>
+                ) : (
+                  "Create Order"
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCancelNewOrder}
+                disabled={isCreatingOrder}
+                className="flex-1 h-12 text-base font-semibold border-2 hover:bg-destructive/5 hover:border-destructive hover:text-destructive transition-all duration-200"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* View Order Modal */}
+        <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Order Details" size="lg">
+          {viewingOrder && (
+            <div className="space-y-8 max-h-[90vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground">Order Number</Label>
+                  <div className="font-bold text-foreground text-lg">{viewingOrder.orderNo}</div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground">Customer</Label>
+                  <div className="font-bold text-foreground text-lg">{viewingOrder.customer}</div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground">Date & Time</Label>
+                  <div className="font-bold text-foreground text-lg">
+                    {viewingOrder.date} at {viewingOrder.time}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                  <Badge className={`gap-2 px-4 py-2 text-sm font-semibold ${getStatusColor(viewingOrder.status)}`}>
+                    {getStatusIcon(viewingOrder.status)}
+                    {viewingOrder.status.charAt(0).toUpperCase() + viewingOrder.status.slice(1)}
+                  </Badge>
+                </div>
+                {viewingOrder.status === 'completed' && (
+                  <div className="col-span-full space-y-2">
+                    <Label className="text-sm font-medium text-muted-foreground">Payment Method</Label>
+                    <Select 
+                      value={viewingOrder.paymentMethod || ''} 
+                      onValueChange={(value) => {
+                        setViewingOrder(prev => prev ? { ...prev, paymentMethod: value as "cash" | "online" | "card" } : null)
+                      }}
+                    >
+                      <SelectTrigger className="h-12 text-base border-2">
+                        <SelectValue placeholder="Select payment method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash" className="text-base py-3">💵 Cash</SelectItem>
+                        <SelectItem value="online" className="text-base py-3">📱 Online Payment</SelectItem>
+                        <SelectItem value="card" className="text-base py-3">💳 Card Payment</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-lg font-semibold text-foreground">Order Items</Label>
+                <div className="space-y-3">
+                  {viewingOrder.items.map((item, index) => (
+                    <div key={index} className="p-4 bg-muted/50 rounded-lg border hover:border-primary/50 transition-colors">
+                      <div className="font-medium text-foreground">{item}</div>
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
 
-                            {/* Order Total */}
-                            {orderItems.length > 0 && (
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center text-lg font-semibold">
-                    <span>Total:</span>
-                    <span>{formatPrice(calculateTotal())}</span>
+              {/* Payment Status & Method */}
+              <div className="space-y-6 border-t-2 pt-6">
+                <Label className="text-lg font-semibold text-foreground">Payment Information</Label>
+                
+                {/* Payment Status */}
+                <div className="space-y-4">
+                  <Label className="text-sm font-medium text-muted-foreground">Payment Status</Label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button 
+                      size="lg"
+                      variant={viewingOrder.payment_status === 'paid' ? 'default' : 'outline'}
+                      onClick={() => updatePaymentStatus(viewingOrder.id, 'paid')}
+                      className="flex-1 h-12 text-base font-semibold border-2"
+                    >
+                      ✅ Paid
+                    </Button>
+                    <Button 
+                      size="lg"
+                      variant={viewingOrder.payment_status === 'pending' ? 'destructive' : 'outline'}
+                      onClick={() => updatePaymentStatus(viewingOrder.id, 'pending')}
+                      className="flex-1 h-12 text-base font-semibold border-2"
+                    >
+                      ⏳ Pending
+                    </Button>
+                    <Button 
+                      size="lg"
+                      variant={viewingOrder.payment_status === 'refunded' ? 'secondary' : 'outline'}
+                      onClick={() => updatePaymentStatus(viewingOrder.id, 'refunded')}
+                      className="flex-1 h-12 text-base font-semibold border-2"
+                    >
+                      ↩️ Refunded
+                    </Button>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* Payment Method Selection */}
-          <div className="space-y-2">
-            <Label>Payment Method *</Label>
-            <Select value={selectedPaymentMethod} onValueChange={(value: "cash" | "card" | "online") => setSelectedPaymentMethod(value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select payment method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash"> Cash</SelectItem>
-                <SelectItem value="card">💳 Card</SelectItem>
-                <SelectItem value="online">📱 Online/UPI</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-4">
-            <Button
-              onClick={handleCreateOrder}
-              disabled={!selectedCustomer || orderItems.length === 0 || isCreatingOrder}
-              className="flex-1"
-            >
-              {isCreatingOrder ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Creating Order...
-                </>
-              ) : (
-                "Create Order"
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleCancelNewOrder}
-              disabled={isCreatingOrder}
-              className="flex-1 bg-transparent"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* View Order Modal */}
-      <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Order Details" size="lg">
-        {viewingOrder && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm text-muted-foreground">Order Number</Label>
-                <div className="font-medium">{viewingOrder.orderNo}</div>
-              </div>
-              <div>
-                <Label className="text-sm text-muted-foreground">Customer</Label>
-                <div className="font-medium">{viewingOrder.customer}</div>
-              </div>
-              <div>
-                <Label className="text-sm text-muted-foreground">Date & Time</Label>
-                <div className="font-medium">
-                  {viewingOrder.date} at {viewingOrder.time}
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm text-muted-foreground">Status</Label>
-                <Badge className={`gap-1 ${getStatusColor(viewingOrder.status)}`}>
-                  {getStatusIcon(viewingOrder.status)}
-                  {viewingOrder.status.charAt(0).toUpperCase() + viewingOrder.status.slice(1)}
-                </Badge>
-              </div>
-              {viewingOrder.status === 'completed' && (
-                <div className="col-span-2">
-                  <Label className="text-sm text-muted-foreground">Payment Method</Label>
+                {/* Payment Method */}
+                <div className="space-y-4">
+                  <Label className="text-sm font-medium text-muted-foreground">Payment Method</Label>
                   <Select 
-                    value={viewingOrder.paymentMethod || ''} 
-                    onValueChange={(value) => {
-                      setViewingOrder(prev => prev ? { ...prev, paymentMethod: value as "cash" | "online" | "card" } : null)
-                    }}
+                    value={viewingOrder.paymentMethod || 'cash'} 
+                    onValueChange={(value: "cash" | "online" | "card") => updatePaymentMethod(viewingOrder.id, value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-12 text-base border-2">
                       <SelectValue placeholder="Select payment method" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="online">Online Payment</SelectItem>
-                      <SelectItem value="card">Card Payment</SelectItem>
+                      <SelectItem value="cash" className="text-base py-3">💵 Cash</SelectItem>
+                      <SelectItem value="card" className="text-base py-3">💳 Card</SelectItem>
+                      <SelectItem value="online" className="text-base py-3">📱 Online/UPI</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-            </div>
-
-            <div>
-              <Label className="text-sm text-muted-foreground">Items</Label>
-              <div className="space-y-2 mt-2">
-                {viewingOrder.items.map((item, index) => (
-                  <div key={index} className="p-2 bg-muted/50 rounded">
-                    {item}
-                  </div>
-                ))}
               </div>
-            </div>
 
-            {/* Payment Status & Method */}
-            <div className="space-y-3 border-t pt-4">
-              <Label className="text-sm font-medium">Payment Information</Label>
-              
-              {/* Payment Status */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Payment Status</Label>
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm"
-                    variant={viewingOrder.payment_status === 'paid' ? 'default' : 'outline'}
-                    onClick={() => updatePaymentStatus(viewingOrder.id, 'paid')}
-                    className="flex-1"
-                  >
-                    ✅ Paid
-                  </Button>
-                  <Button 
-                    size="sm"
-                    variant={viewingOrder.payment_status === 'pending' ? 'destructive' : 'outline'}
-                    onClick={() => updatePaymentStatus(viewingOrder.id, 'pending')}
-                    className="flex-1"
-                  >
-                    ⏳ Pending
-                  </Button>
-                  <Button 
-                    size="sm"
-                    variant={viewingOrder.payment_status === 'refunded' ? 'secondary' : 'outline'}
-                    onClick={() => updatePaymentStatus(viewingOrder.id, 'refunded')}
-                    className="flex-1"
-                  >
-                    ↩️ Refunded
-                  </Button>
+              <div className="border-t-2 pt-6">
+                <div className="flex justify-between items-center text-2xl font-bold">
+                  <span className="text-foreground">Total Amount:</span>
+                  <span className="text-primary">{formatPrice(viewingOrder.total)}</span>
                 </div>
               </div>
-
-              {/* Payment Method */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Payment Method</Label>
-                <Select 
-                  value={viewingOrder.paymentMethod || 'cash'} 
-                  onValueChange={(value: "cash" | "online" | "card") => updatePaymentMethod(viewingOrder.id, value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">💵 Cash</SelectItem>
-                    <SelectItem value="card">💳 Card</SelectItem>
-                    <SelectItem value="online">📱 Online/UPI</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
-
-            <div className="border-t pt-4">
-              <div className="flex justify-between items-center text-lg font-semibold">
-                <span>Total:</span>
-                <span>{formatPrice(viewingOrder.total)}</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
+          )}
+        </Modal>
+      </div>
     </div>
   )
 }
