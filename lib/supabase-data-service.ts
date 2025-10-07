@@ -17,8 +17,6 @@ export interface UserProfile {
   pincode?: string
   is_subscribed?: boolean
   trial_end_date?: string
-  razorpay_customer_id?: string
-  razorpay_subscription_id?: string
   subscription_plan?: string
   subscription_status?: string
   created_at: string
@@ -2371,35 +2369,14 @@ export class SupabaseDataService {
    * Get subscription status for a user
    */
   async getSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
-    const { data: profile, error } = await this.supabase
-      .from('user_profiles')
-      .select('is_subscribed, trial_end_date, subscription_plan, subscription_status')
-      .eq('id', userId)
-      .single()
-
-    if (error || !profile) {
-      return {
-        isSubscribed: false,
-        isTrialActive: false,
-        trialDaysLeft: 0,
-        trialEndDate: null,
-        subscriptionPlan: null,
-        subscriptionStatus: 'inactive'
-      }
-    }
-
-    const now = new Date()
-    const trialEndDate = profile.trial_end_date ? new Date(profile.trial_end_date) : null
-    const isTrialActive = trialEndDate ? now < trialEndDate : false
-    const trialDaysLeft = trialEndDate ? Math.max(0, Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0
-
+    // Always return free access for all users
     return {
-      isSubscribed: profile.is_subscribed || false,
-      isTrialActive,
-      trialDaysLeft,
-      trialEndDate,
-      subscriptionPlan: profile.subscription_plan,
-      subscriptionStatus: profile.subscription_status || 'trial'
+      isSubscribed: true,
+      isTrialActive: false,
+      trialDaysLeft: 0,
+      trialEndDate: null,
+      subscriptionPlan: 'free',
+      subscriptionStatus: 'active'
     }
   }
 
@@ -2438,54 +2415,18 @@ export class SupabaseDataService {
    */
   async activateSubscription(
     userId: string,
-    razorpayCustomerId: string,
-    razorpaySubscriptionId: string,
     planId: string
   ): Promise<void> {
-    const { error } = await this.supabase
-      .from('user_profiles')
-      .update({
-        is_subscribed: true,
-        razorpay_customer_id: razorpayCustomerId,
-        razorpay_subscription_id: razorpaySubscriptionId,
-        subscription_plan: planId,
-        subscription_status: 'active',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId)
-
-    if (error) {
-      console.error('Error activating subscription:', error)
-      throw new Error('Failed to activate subscription')
-    }
-
-    // Log the subscription activation
-    await this.logSubscriptionEvent(userId, 'subscription_activated', {
-      razorpay_customer_id: razorpayCustomerId,
-      razorpay_subscription_id: razorpaySubscriptionId,
-      plan_id: planId
-    })
+    // No subscription activation needed for free product
+    return
   }
 
   /**
    * Cancel subscription
    */
   async cancelSubscription(userId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('user_profiles')
-      .update({
-        is_subscribed: false,
-        subscription_status: 'cancelled',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId)
-
-    if (error) {
-      console.error('Error cancelling subscription:', error)
-      throw new Error('Failed to cancel subscription')
-    }
-
-    await this.logSubscriptionEvent(userId, 'subscription_cancelled')
+    // No subscription to cancel for free product
+    return
   }
 
   /**
@@ -2496,18 +2437,8 @@ export class SupabaseDataService {
     eventType: string,
     metadata: any = {}
   ): Promise<void> {
-    const { error } = await this.supabase
-      .from('subscription_logs')
-      .insert({
-        user_id: userId,
-        event_type: eventType,
-        metadata,
-        created_at: new Date().toISOString()
-      })
-
-    if (error) {
-      console.error('Error logging subscription event:', error)
-    }
+    // No logging needed for free product
+    return
   }
 
   /**

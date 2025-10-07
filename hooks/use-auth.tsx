@@ -42,7 +42,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshSubscriptionStatus = async () => {
     if (user?.id) {
       try {
-        const status = await subscriptionService.getSubscriptionStatus(user.id)
+        // All users now have free access
+        const status = {
+          isSubscribed: true,
+          isTrialActive: false,
+          trialDaysLeft: 0,
+          trialEndDate: null,
+          subscriptionPlan: 'free',
+          subscriptionStatus: 'active'
+        }
         setSubscriptionStatus(status)
         setCachedSubscription(status)
         setLastFetchTime(Date.now())
@@ -58,15 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    // Refresh subscription status to get latest data
-    await refreshSubscriptionStatus()
-
-    // Check if user has access (subscribed or trial active)
-    if (subscriptionStatus?.isSubscribed || subscriptionStatus?.isTrialActive) {
-      router.push('/dashboard')
-    } else {
-      router.push('/subscription')
-    }
+    // All users now have free access - redirect to dashboard
+    router.push('/dashboard')
   }
 
   useEffect(() => {
@@ -97,7 +98,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCachedProfile(profile || null)
           
           if (profile) {
-            const status = await subscriptionService.getSubscriptionStatus(data.user.id)
+            // All users now have free access
+            const status = {
+              isSubscribed: true,
+              isTrialActive: false,
+              trialDaysLeft: 0,
+              trialEndDate: null,
+              subscriptionPlan: 'free',
+              subscriptionStatus: 'active'
+            }
             setSubscriptionStatus(status)
             setCachedSubscription(status)
             setLastFetchTime(Date.now())
@@ -138,7 +147,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCachedProfile(profile || null)
         
         if (profile) {
-          const status = await subscriptionService.getSubscriptionStatus(session.user.id)
+          // All users now have free access
+          const status = {
+            isSubscribed: true,
+            isTrialActive: false,
+            trialDaysLeft: 0,
+            trialEndDate: null,
+            subscriptionPlan: 'free',
+            subscriptionStatus: 'active'
+          }
           setSubscriptionStatus(status)
           setCachedSubscription(status)
           setLastFetchTime(Date.now())

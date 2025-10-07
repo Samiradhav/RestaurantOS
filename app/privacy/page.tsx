@@ -10,14 +10,14 @@ export default function PrivacyPage() {
       {/* Header */}
       <div className="border-b bg-card/95 backdrop-blur">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <Link href="/signup">
+          <Link href="/dashboard">
             <Button variant="ghost" className="mb-4">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Sign Up
+              Back to Dashboard
             </Button>
           </Link>
           <h1 className="text-3xl font-bold text-foreground">Privacy Policy</h1>
-          <p className="text-muted-foreground mt-2">Last updated: September 25, 2025</p>
+          <p className="text-muted-foreground mt-2">Last updated: October 6, 2025</p>
         </div>
       </div>
 
@@ -32,7 +32,6 @@ export default function PrivacyPage() {
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li>Name, email address, and phone number</li>
                 <li>Restaurant name and business details</li>
-                <li>Payment information for subscription billing</li>
                 <li>Profile information and preferences</li>
                 <li>Communication preferences and marketing consents</li>
                 <li>Customer feedback and support requests</li>
@@ -80,7 +79,6 @@ export default function PrivacyPage() {
               <p>We use the collected information to:</p>
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li>Provide, maintain, and improve RestaurantOS</li>
-                <li>Process transactions and manage subscriptions</li>
                 <li>Send technical notices and support messages</li>
                 <li>Respond to your comments and questions</li>
                 <li>Analyze usage patterns to improve user experience</li>
@@ -99,7 +97,7 @@ export default function PrivacyPage() {
               We do not sell, trade, or otherwise transfer your personal information to third parties without your consent, except as described in this policy. We may share your information in the following circumstances:
             </p>
             <ul className="list-disc list-inside space-y-2 ml-4 text-muted-foreground">
-              <li>With service providers who assist in our operations (payment processors, hosting providers)</li>
+              <li>With service providers who assist in our operations (hosting providers, analytics services)</li>
               <li>When required by law or to protect our rights</li>
               <li>In connection with a business transfer or acquisition</li>
               <li>With your explicit consent</li>
@@ -143,10 +141,10 @@ export default function PrivacyPage() {
           <div className="space-y-4">
             <h2 className="text-2xl font-semibold text-foreground">6. Third-Party Services and Integrations</h2>
             <p className="text-muted-foreground leading-relaxed">
-              RestaurantOS integrates with third-party services such as payment processors (Razorpay) and authentication providers (Google). These services have their own privacy policies, and we encourage you to review them. We are not responsible for the privacy practices of these third parties.
+              RestaurantOS integrates with third-party services such as authentication providers (Google). These services have their own privacy policies, and we encourage you to review them. We are not responsible for the privacy practices of these third parties.
             </p>
             <p className="text-muted-foreground leading-relaxed mt-4">
-              We may also integrate with additional services for enhanced functionality, including cloud storage providers, analytics platforms, and customer support tools. Each integration is carefully selected to ensure compliance with data protection standards.
+              We may integrate with additional services for enhanced functionality, including cloud storage providers, analytics platforms, and customer support tools. Each integration is carefully selected to ensure compliance with data protection standards.
             </p>
           </div>
 
@@ -169,7 +167,6 @@ export default function PrivacyPage() {
               <p className="text-muted-foreground">Specific retention periods:</p>
               <ul className="list-disc list-inside space-y-1 ml-4 text-muted-foreground">
                 <li>Account data: Retained while your account is active and for 3 years after deactivation</li>
-                <li>Payment information: Retained for 7 years for tax and accounting purposes</li>
                 <li>Usage logs: Retained for 2 years for security and analytics</li>
                 <li>Marketing data: Retained until you unsubscribe or withdraw consent</li>
               </ul>
@@ -290,7 +287,7 @@ export default function PrivacyPage() {
                     support@restaurantos.in
                   </a>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   <span className="font-medium">Phone:</span>
                   <a href="tel:+919876543210" className="text-primary hover:text-primary/80 transition-colors">
@@ -303,7 +300,7 @@ export default function PrivacyPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="font-medium">Address:</span>
-                  <span>pune, Maharashtra, India</span>
+                  <span>Pune, Maharashtra, India</span>
                 </div>
               </div>
               <p className="mt-4">
