@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   MenuItem,
   supabaseDataService,
@@ -61,9 +61,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { DotsHorizontalIcon } from "@radix-ui/react-icons";
+import { MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useCurrency } from "@/lib/currency-store";
 
 const MenuPage = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -82,8 +81,6 @@ const MenuPage = () => {
     image_url: "",
     is_available: true,
   });
-
-  const { convertPrice } = useCurrency();
 
   useEffect(() => {
     const fetchMenuItems = async () => {
@@ -252,8 +249,6 @@ const MenuPage = () => {
     {
       key: "price" as const,
       label: "Price",
-      // FIX: Changed the rendering logic to format the price directly
-      // as Indian Rupees without any conversion.
       render: (value: number) => {
         const formatted = new Intl.NumberFormat('en-IN', {
           style: 'currency',
@@ -280,7 +275,7 @@ const MenuPage = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0">
-              <DotsHorizontalIcon className="h-4 w-4" />
+              <MoreHorizontal className="h-4 w-4" />
               <span className="sr-only">Open menu</span>
             </Button>
           </DropdownMenuTrigger>
@@ -487,7 +482,6 @@ const MenuPage = () => {
                   <TableCell>Price</TableCell>
                   <TableCell>
                     {currentMenuItem?.price ?
-                      // FIX: The details view also needs to be updated to show the price correctly.
                       new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(currentMenuItem.price) :
                       "N/A"}
                   </TableCell>
