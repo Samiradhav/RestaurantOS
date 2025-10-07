@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { useTheme } from "next-themes"
@@ -30,7 +30,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Modal } from "@/components/ui/modal"
 import { supabaseDataService, type UserProfile, type Setting } from "@/lib/supabase-data-service"
-import { useRestaurantStore } from "@/lib/shared-state"
 import { useCurrency, type Currency } from "@/lib/currency-store"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/hooks/use-auth"
@@ -38,7 +37,6 @@ import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 
 export default function SettingsPage() {
-  const { customers, menuItems, orders, inventory } = useRestaurantStore()
   const { currency } = useCurrency()
   const { theme, setTheme } = useTheme()
   const { user, logout } = useAuth()
@@ -90,99 +88,79 @@ export default function SettingsPage() {
   // Validation states
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
 
-  // Load restaurant profile and settings from Supabase
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        setIsLoading(true)
+  // Memoized load settings function to prevent unnecessary re-renders
+  const loadSettings = useCallback(async () => {
+    try {
+      setIsLoading(true)
 
-        // Test Supabase connection first
-        console.log('loadSettings: Testing Supabase connection...')
-        const connectionTest = await supabaseDataService.testConnection()
-        if (!connectionTest.success) {
-          console.error('loadSettings: Supabase connection failed:', connectionTest.error)
-          toast({
-            title: "Connection Issue",
-            description: "Database connection failed. Settings will work locally.",
-            variant: "destructive",
-          })
-        }
-
-        // Load user profile
-        const profile = await supabaseDataService.getUserProfile()
-        if (profile) {
-          setSettings(prev => ({
-            ...prev,
-            restaurantName: profile.restaurant_name || "",
-            address: profile.address || "",
-            phone: profile.phone || "",
-            email: profile.email || "",
-          }))
-        }
-
-        // Load settings from database
-        const dbSettings = await supabaseDataService.getSettings()
-
-        // Create a map of settings from database
-        const settingsMap: Record<string, any> = {}
-        dbSettings.forEach(setting => {
-          try {
-            // Try to parse JSON values, fallback to string if parsing fails
-            settingsMap[setting.setting_key] = typeof setting.setting_value === 'string'
-              ? JSON.parse(setting.setting_value)
-              : setting.setting_value
-          } catch {
-            settingsMap[setting.setting_key] = setting.setting_value
-          }
-        })
-
-        // Apply saved settings with proper defaults
+      // Load user profile first (fastest operation)
+      const profile = await supabaseDataService.getUserProfile()
+      if (profile) {
         setSettings(prev => ({
           ...prev,
-          description: settingsMap.description || "",
-          logo: settingsMap.logo || "",
-          theme: settingsMap.theme || "dark",
-          notifications: {
-            ...prev.notifications,
-            ...(settingsMap.notifications || {}),
-          } as NotificationSettings,
-          business: {
-            currency: (settingsMap.business?.currency as Currency) || currency || "INR",
-            timezone: settingsMap.business?.timezone || "America/New_York",
-            taxRate: settingsMap.business?.taxRate || "8.5",
-            serviceCharge: settingsMap.business?.serviceCharge || "15",
-          } as BusinessSettings,
+          restaurantName: profile.restaurant_name || "",
+          address: profile.address || "",
+          phone: profile.phone || "",
+          email: profile.email || "",
         }))
-
-        // Apply theme if saved and different from current theme
-        if (settingsMap.theme && settingsMap.theme !== theme) {
-          console.log('loadSettings: Applying saved theme:', settingsMap.theme)
-          setTheme(settingsMap.theme)
-        }
-
-        // Apply currency if saved and different from current
-        if (settingsMap.business?.currency && settingsMap.business.currency !== currency) {
-          const savedCurrency = settingsMap.business.currency as Currency
-          if (["INR"].includes(savedCurrency)) {
-            // Currency is read-only in the store, no setter available
-            console.log('Currency setting loaded:', savedCurrency)
-          }
-        }
-
-      } catch (error) {
-        console.error("Error loading settings:", error)
-        toast({
-          title: "Error Loading Settings",
-          description: "Failed to load your restaurant settings. Using defaults.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
       }
-    }
 
+      // Load settings from database in parallel
+      const dbSettings = await supabaseDataService.getSettings()
+
+      // Create a map of settings from database
+      const settingsMap: Record<string, any> = {}
+      dbSettings.forEach(setting => {
+        try {
+          // Try to parse JSON values, fallback to string if parsing fails
+          settingsMap[setting.setting_key] = typeof setting.setting_value === 'string'
+            ? JSON.parse(setting.setting_value)
+            : setting.setting_value
+        } catch {
+          settingsMap[setting.setting_key] = setting.setting_value
+        }
+      })
+
+      // Apply saved settings with proper defaults
+      setSettings(prev => ({
+        ...prev,
+        description: settingsMap.description || "",
+        logo: settingsMap.logo || "",
+        theme: settingsMap.theme || "dark",
+        notifications: {
+          ...prev.notifications,
+          ...(settingsMap.notifications || {}),
+        } as NotificationSettings,
+        business: {
+          currency: (settingsMap.business?.currency as Currency) || currency || "INR",
+          timezone: settingsMap.business?.timezone || "America/New_York",
+          taxRate: settingsMap.business?.taxRate || "8.5",
+          serviceCharge: settingsMap.business?.serviceCharge || "15",
+        } as BusinessSettings,
+      }))
+
+      // Apply theme if saved and different from current theme
+      if (settingsMap.theme && settingsMap.theme !== theme) {
+        setTheme(settingsMap.theme)
+      }
+
+    } catch (error) {
+      console.error("Error loading settings:", error)
+      toast({
+        title: "Error Loading Settings",
+        description: "Failed to load your restaurant settings. Using defaults.",
+        variant: "destructive",
+      })
+    } finally {
+      // Always set loading to false, even if there are errors
+      setIsLoading(false)
+    }
+  }, [toast, setTheme, currency, theme])
+
+  // Load settings only once on mount
+  useEffect(() => {
     loadSettings()
-  }, [toast, setTheme, currency])
+  }, [loadSettings])
 
   // Validation functions
   const validateEmail = (email: string) => {
@@ -263,8 +241,6 @@ export default function SettingsPage() {
   // Theme change handler - simplified and robust
   const handleThemeChange = async (value: string) => {
     try {
-      console.log('handleThemeChange: Changing theme to:', value)
-
       // Update local state immediately
       updateSetting("theme", value)
 
@@ -275,13 +251,11 @@ export default function SettingsPage() {
       const saved = await supabaseDataService.upsertSetting("theme", value)
 
       if (saved) {
-        console.log('handleThemeChange: Theme saved successfully')
         toast({
           title: "Theme Updated",
           description: `Theme changed to ${value}.`,
         })
       } else {
-        console.warn('handleThemeChange: Theme applied locally but database save failed')
         toast({
           title: "Theme Applied",
           description: `Theme changed to ${value}. Will sync when connection is restored.`,
@@ -460,7 +434,7 @@ export default function SettingsPage() {
         description: "Fetching data from database...",
       })
 
-      // Fetch all data from database
+      // Fetch all data from database in parallel
       const [dbCustomers, dbMenuItems, dbOrders, dbInventory, dbStaff] = await Promise.all([
         supabaseDataService.getCustomers(),
         supabaseDataService.getMenuItems(),
@@ -678,8 +652,6 @@ export default function SettingsPage() {
           }
         }
       }
-
-      // Note: Theme is already saved when changed, so we don't save it again here
 
       toast({
         title: "✅ Settings Saved Successfully!",
